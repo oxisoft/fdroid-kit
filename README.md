@@ -34,6 +34,24 @@ fdroidkit site          # landing page with fingerprint and add-repo QR, from th
 fdroidkit verify        # every fingerprint on the page matches the index key
 ```
 
+### publish
+
+Works today (`init`, `add-app`, `site`, `verify` follow). Every step is a hard stop:
+versionCode higher than the published one, identity (aapt2), every signer pinned
+(apksigner, rotation aware, Source Stamp ignored), no `com.pairip` in any dex; then copy in,
+bump the metadata, `fdroid update`, `fdroid deploy`, and read the versionCode back from the
+live `index-v2.json`. `--dry-run` stops after the checks.
+
+```
+fdroidkit --repo /srv/fdroid publish com.example.app 42 1.4.0 --source play --play-sa-file sa.json
+fdroidkit --repo /srv/fdroid publish com.example.app 42 1.4.0 --source file --apk app.apk \
+    --after-update "python3 render_site.py" --rsync-site host:/var/www/fdroid/
+```
+
+Tools are found on their own: build-tools from `--build-tools`, `$ANDROID_HOME`, `sdk_path` in
+config.yml or `~/android`; `fdroid` on PATH; the live URL from `repo_url`. Exit codes: 0 ok,
+1 the APK was refused, 3 setup error. `--source play` needs `pip install 'fdroidkit[play]'`.
+
 ## In CI
 
 Gitea / Forgejo:

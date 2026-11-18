@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Stand-in for fdroidserver: `update` indexes repo/*.apk, `deploy` copies to $FAKE_WEBROOT."""
+import hashlib
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _fixture  # noqa: E402
+
+cmd = sys.argv[1]
+repo = Path.cwd() / "repo"
+with open(Path.cwd() / "fdroid-calls.log", "a") as f:
+    f.write(cmd + "\n")
+if cmd == "update":
+    pk = {}
+    for apk in sorted(repo.glob("*.apk")):
+        i = _fixture.info(apk)
+        h = hashlib.sha256(apk.read_bytes()).hexdigest()
+        pk.setdefault(i["package"], {"versions": {}})["versions"][h] = {"manifest": {"versionCode": i["versionCode"]}}
+    (repo / "index-v2.json").write_text(json.dumps({"packages": pk}))
+    (repo / "entry.jar").write_bytes(b"jar")
+elif cmd == "deploy":
+    dest = Path(os.environ["FAKE_WEBROOT"]) / "fdroid" / "repo"
+    shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(repo, dest)
+else:
+    sys.exit(f"fake fdroid: unknown command {cmd}")

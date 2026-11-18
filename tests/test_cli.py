@@ -23,7 +23,6 @@ def test_no_command_prints_help(capsys):
 @pytest.mark.parametrize("argv", [
     ["init", "--name", "Example", "--url", "https://f.example.com/fdroid/repo"],
     ["add-app", "com.example.app", "--pin", "a" * 64],
-    ["publish", "com.example.app", "42", "1.4.0", "--dry-run"],
     ["site"],
     ["verify"],
 ])
