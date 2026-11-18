@@ -1,0 +1,43 @@
+name: fdroidkit publish
+description: Publish the Play-signed universal APK of a release to your own F-Droid repo.
+# Gitea / Forgejo Actions composite action. Call it from an app repo's release job
+# after the Play upload:
+#
+#   - uses: https://g.oxisoft.io/oxisoft/fdroid-kit/actions/gitea@v0.1.0
+#     with: { package: com.example.app, version-code: "42", version-name: "1.4.0" }
+#
+# Status: skeleton (v0.0.1). The `publish` command lands in v0.1.
+inputs:
+  package:
+    description: Application id
+    required: true
+  version-code:
+    description: versionCode of the release
+    required: true
+  version-name:
+    description: versionName of the release
+    required: true
+  repo-path:
+    description: Path of the F-Droid repo working tree on the runner (self-hosted model)
+    required: true
+  source:
+    description: play | file | github-release
+    default: play
+  dry-run:
+    description: "true = run every check, publish nothing"
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Install fdroidkit
+      shell: bash
+      run: python3 -m pip install --user --quiet "fdroidkit[play] @ git+https://github.com/oxisoft/fdroid-kit@${{ github.action_ref || 'main' }}"
+    - name: Publish
+      shell: bash
+      run: |
+        umask 022
+        args=()
+        [ "${{ inputs.dry-run }}" = "true" ] && args+=(--dry-run)
+        python3 -m fdroidkit --repo "${{ inputs.repo-path }}" publish \
+          "${{ inputs.package }}" "${{ inputs.version-code }}" "${{ inputs.version-name }}" \
+          --source "${{ inputs.source }}" "${args[@]}"

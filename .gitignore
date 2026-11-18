@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+
+# Never commit an index key or its passphrase (docs/signing-model.md).
+*.p12
+*.jks
+*.keystore
+keystore*
+*.pass

@@ -1,0 +1,32 @@
+# Release job of a Flutter app on Gitea / Forgejo: Play internal upload, then F-Droid.
+# Runs on a self-hosted runner that holds the F-Droid repo working tree and its index key.
+name: android-release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and upload to Play internal
+        run: |
+          flutter build appbundle --release
+          # your Play upload step here (fastlane, a script, ...)
+      - name: Version from the tag (vX.Y.Z+N)
+        id: v
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          echo "name=${tag%+*}" >> "$GITHUB_OUTPUT"
+          echo "code=${tag#*+}" >> "$GITHUB_OUTPUT"
+      - name: Publish to F-Droid
+        uses: https://g.oxisoft.io/oxisoft/fdroid-kit/actions/gitea@v0.1.0
+        env:
+          PLAY_SA_FILE: ${{ runner.temp }}/play-sa.json
+        with:
+          package: com.example.app
+          version-code: ${{ steps.v.outputs.code }}
+          version-name: ${{ steps.v.outputs.name }}
+          repo-path: /srv/fdroid

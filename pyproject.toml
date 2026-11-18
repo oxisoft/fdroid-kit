@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fdroidkit"
+version = "0.0.1"
+description = "Run your own F-Droid repository: publish Play-signed APKs from CI, with signer pins, a Play protection guard and a landing page."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "OxiSoft", email = "info@oxisoft.io" }]
+requires-python = ">=3.10"
+keywords = ["f-droid", "fdroid", "android", "apk", "play-app-signing", "ci"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: POSIX",
+  "Topic :: Software Development :: Build Tools",
+]
+# Runtime deps (fdroidserver, google-api-python-client) arrive with the commands
+# that need them (FK-5 publish, FK-6 site); the skeleton runs on the stdlib.
+dependencies = []
+
+[project.optional-dependencies]
+play = ["google-api-python-client", "google-auth"]
+dev = ["pytest"]
+
+[project.scripts]
+fdroidkit = "fdroidkit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/oxisoft/fdroid-kit"
+Source = "https://g.oxisoft.io/oxisoft/fdroid-kit"
+Issues = "https://github.com/oxisoft/fdroid-kit/issues"
+
+[tool.setuptools.packages.find]
+include = ["fdroidkit*"]
+
+[tool.setuptools.package-data]
+"fdroidkit.site" = ["templates/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
