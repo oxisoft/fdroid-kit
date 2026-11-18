@@ -20,15 +20,6 @@ def test_no_command_prints_help(capsys):
         assert cmd in out
 
 
-@pytest.mark.parametrize("argv", [
-    ["init", "--name", "Example", "--url", "https://f.example.com/fdroid/repo"],
-    ["add-app", "com.example.app", "--pin", "a" * 64],
-])
-def test_unimplemented_commands_exit_2(argv, capsys):
-    assert cli.main(argv) == 2
-    assert "not implemented yet" in capsys.readouterr().err
-
-
 @pytest.mark.parametrize("argv", [["site"], ["verify"]])
 def test_site_commands_without_a_repo_are_setup_errors(argv, tmp_path, capsys):
     assert cli.main(["--repo", str(tmp_path), *argv]) == 3

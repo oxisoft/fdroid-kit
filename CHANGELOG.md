@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **`init` and `add-app` work**. `init` creates the index key with keytool (passphrase only from
+  an environment variable, never argv or a prompt) and a `config.yml` with `{env: NAME}`
+  passphrases, so it can be committed; repo and archive icons land where fdroidserver reads them.
+  `add-app --discover-signer` pins the signer read from a real APK after an identity, Play
+  signer (`O=Google Inc.`) and pairip check; `--pin` adds a rotated key without touching the rest.
+- `publish` stops before `fdroid update` when config.yml reads an unset environment variable
+  (fdroidserver would crash with a TypeError deep in keytool).
 - **`site` and `verify` work**: a neutral, CSP-clean landing page from the signed index
   (index-v2.json is refused unless entry.json vouches for it), fingerprint and add-repo QR (SVG)
   from the certificate that signed entry.jar, brand via `fdroidkit.json`, llms.txt, sitemap,

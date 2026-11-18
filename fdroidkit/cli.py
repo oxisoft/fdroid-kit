@@ -11,10 +11,7 @@ import sys
 
 from . import __version__
 
-NOT_YET = {
-    "init": "0.1",
-    "add-app": "0.1",
-}
+NOT_YET: dict[str, str] = {}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +27,16 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--name", required=True, help="repo name shown in F-Droid clients")
     s.add_argument("--url", required=True, help="public repo URL, e.g. https://fdroid.example.com/fdroid/repo")
     s.add_argument("--description", default="", help="repo description")
+    s.add_argument("--pass-env", default="FDROID_KEYSTORE_PASS", metavar="NAME",
+                   help="environment variable holding the index key passphrase; config.yml reads it "
+                        "as {env: NAME} (default: FDROID_KEYSTORE_PASS)")
+    s.add_argument("--keystore", help="where to create the index key (default: ~/.config/fdroidkit/<alias>.p12, "
+                   "outside the repo)")
+    s.add_argument("--alias", help="key alias (default: the host of --url)")
+    s.add_argument("--dname", help="key distinguished name (default: CN=<alias>, OU=F-Droid)")
+    s.add_argument("--icon", help="repo icon PNG, 512 px (default: a plain placeholder to replace)")
+    s.add_argument("--sdk-path", default=None, help="Android SDK for fdroidserver (default: $ANDROID_HOME if set)")
+    s.add_argument("--archive-older", type=int, default=3, help="versions kept in repo/ before archive/ (default 3)")
 
     s = sub.add_parser("add-app", help="add metadata for a package and pin its signer")
     s.add_argument("package", help="application id, e.g. com.example.app")
@@ -37,6 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="read the signer digest from this APK and pin it (Play signer expected)")
     s.add_argument("--pin", action="append", default=[], metavar="SHA256",
                    help="pin a signer certificate SHA-256 digest (repeatable, for rotated keys)")
+    s.add_argument("--not-play", action="store_true",
+                   help="the APK is signed by you, not by Play App Signing: skip the O=Google Inc. check")
+    s.add_argument("--name", help="app name in clients (default: last part of the package)")
+    s.add_argument("--license", default="Proprietary", help="License field (default: Proprietary)")
+    s.add_argument("--website", default="", help="WebSite field")
+    s.add_argument("--source-code", default="", help="SourceCode field")
+    s.add_argument("--build-tools", help="Android build-tools dir with aapt2 + apksigner")
 
     s = sub.add_parser("publish", help="check an APK, add it, update the index, deploy, read back")
     s.add_argument("package")
@@ -71,15 +85,65 @@ def main(argv: list[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 0
+    if args.command == "init":
+        return _init(args)
+    if args.command == "add-app":
+        return _add_app(args)
     if args.command == "publish":
         return _publish(args)
     if args.command == "site":
         return _site(args)
     if args.command == "verify":
         return _verify(args)
-    print(f"fdroidkit {args.command}: not implemented yet (planned for {NOT_YET[args.command]}).",
+    print(f"fdroidkit {args.command}: not implemented yet (planned for {NOT_YET.get(args.command, 'later')}).",
           file=sys.stderr)
     return 2
+
+
+def _init(args) -> int:
+    import os
+    from pathlib import Path
+
+    from .init import InitError, InitOptions, init
+
+    o = InitOptions(
+        repo=Path(args.repo), name=args.name, url=args.url, description=args.description,
+        pass_env=args.pass_env, keystore=Path(args.keystore) if args.keystore else None,
+        alias=args.alias, dname=args.dname, icon=Path(args.icon) if args.icon else None,
+        sdk_path=args.sdk_path or os.environ.get("ANDROID_HOME") or None,
+        archive_older=args.archive_older,
+    )
+    try:
+        init(o)
+    except (InitError, OSError) as e:
+        print(f"fdroidkit init: {e}", file=sys.stderr)
+        return 3
+    return 0
+
+
+def _add_app(args) -> int:
+    from pathlib import Path
+
+    from .add_app import AddAppError, AddAppOptions, add_app
+    from .checks import CheckFailed
+    from .publish import PublishError
+
+    o = AddAppOptions(
+        repo=Path(args.repo), package=args.package,
+        discover_apk=Path(args.discover_signer) if args.discover_signer else None,
+        pins=args.pin, not_play=args.not_play, name=args.name, license=args.license,
+        website=args.website, source_code=args.source_code,
+        build_tools=Path(args.build_tools) if args.build_tools else None,
+    )
+    try:
+        add_app(o)
+    except CheckFailed as e:
+        print(f"fdroidkit add-app: refused: {e}", file=sys.stderr)
+        return 1
+    except (AddAppError, PublishError, OSError) as e:
+        print(f"fdroidkit add-app: {e}", file=sys.stderr)
+        return 3
+    return 0
 
 
 def _publish(args) -> int:

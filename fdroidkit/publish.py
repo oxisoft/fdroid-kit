@@ -102,6 +102,18 @@ def find_fdroid(explicit: str | None) -> str:
     raise PublishError("fdroid (fdroidserver) not found (use --fdroid or pip install fdroidserver)")
 
 
+_ENV_REF_RE = re.compile(r"^\s*([a-z_]+):\s*\{\s*env:\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}", re.M)
+
+
+def missing_env(repo: Path) -> list[str]:
+    """`key: {env: NAME}` lines in config.yml whose NAME is unset. fdroidserver only
+    logs those and then crashes deep in keytool/jarsigner with a TypeError."""
+    cfg = repo / "config.yml"
+    if not cfg.exists():
+        return []
+    return [f"{k} (${v})" for k, v in _ENV_REF_RE.findall(cfg.read_text()) if not os.environ.get(v)]
+
+
 def read_config(repo: Path) -> dict:
     """The few scalar keys we need from config.yml, without a YAML dependency."""
     cfg = repo / "config.yml"
@@ -218,6 +230,9 @@ def publish(opts: Options, runner: Callable = run, sleep: Callable = time.sleep)
     fdroid = ""
     if not opts.dry_run:
         fdroid = find_fdroid(opts.fdroid)
+        unset = missing_env(repo)
+        if unset:
+            raise PublishError("config.yml reads from unset environment variables: " + ", ".join(unset))
         if opts.readback and not live_url:
             raise PublishError("no live URL: set repo_url in config.yml, pass --live-url, or --no-readback")
 

@@ -6,8 +6,12 @@ Each of these cost real time on a production repo. fdroidkit handles them; this 
   (`{env: NAME}`), not through a prompt.
 - **setuptools 81+ breaks fdroidserver 2.4.x** (`pkg_resources` gone). Install fdroidserver with
   `setuptools<81` in the same environment.
-- **Placeholder repo icon.** `fdroid init` points at a default icon that clients show as broken;
-  set your own `repo_icon`, and the archive one too when `archive_older` is on.
+- **Placeholder repo icon.** `repo_icon` / `archive_icon` are paths relative to the repo ROOT;
+  `fdroid update` copies them into `repo/icons/`. A missing root file only logs a warning and the
+  index ships fdroidserver's own placeholder. `fdroidkit init` writes `icon.png` at the root (and
+  in both icons folders); replace that root file with your own 512 px PNG.
+- **An unset `{env: NAME}` variable** is only logged by fdroidserver, then signing crashes with a
+  `TypeError` from inside keytool. `fdroidkit publish` checks the variables first.
 - **umask 077 in CI makes `entry.jar` mode 0600**, rsync carries the mode to the web root, and every
   client gets 403. Write public files under umask 022.
 - **rsync deploy over a non-standard ssh port**: use an ssh config alias in `serverwebroot`, the

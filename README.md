@@ -7,8 +7,8 @@ adds it to your F-Droid repo, deploys it and reads it back from the live index. 
 install from F-Droid and update from Play, or the other way round, because both channels ship the
 same Google-signed APK.
 
-> Status: **v0.0.1, skeleton.** The command line surface is fixed and the APK checks are in place
-> and tested; the commands land in v0.1. Not ready for production use yet.
+> Status: **v0.0.1, pre-release.** All five commands work and are tested; the CI actions and the
+> first tagged release (v0.1) come next.
 
 ## Why another F-Droid tool
 
@@ -34,9 +34,37 @@ fdroidkit site          # landing page with fingerprint and add-repo QR, from th
 fdroidkit verify        # every fingerprint on the page matches the index key
 ```
 
+### init
+
+```
+export FDROID_KEYSTORE_PASS="$(head -c 32 /dev/urandom | base64)"   # keep it in your password manager / CI secrets
+fdroidkit --repo /srv/fdroid init --name "Example Apps" --url https://fdroid.example.com/fdroid/repo
+```
+
+Creates the index key (RSA 4096, PKCS12, `~/.config/fdroidkit/<host>.p12` by default, outside
+the repo, mode 0600) and a `config.yml` that reads the passphrase as `keystorepass: {env:
+FDROID_KEYSTORE_PASS}`, so the config holds no secret and can be committed. Also writes the repo
+and archive icon where fdroidserver looks for them (a missing one is silently replaced by its
+placeholder), a `.gitignore` for keys and passphrase files, and prints the fingerprint. It never
+re-inits a repo or overwrites a key. `--pass-env NAME` picks another variable.
+
+### add-app
+
+```
+fdroidkit add-app com.example.app --discover-signer universal.apk
+fdroidkit add-app com.example.app --pin <sha256>          # add a pin, e.g. after a key rotation
+```
+
+`--discover-signer` reads the signer from a real APK and pins it in `AllowedAPKSigningKeys`, after
+checking that the APK is that package, that every signer is Play App Signing (`O=Google Inc.` in
+the certificate DN; pinning your upload key by mistake would refuse every Play-signed APK) and
+that it has no Play automatic protection. Take the universal APK from Play Console (App bundle
+explorer). `--not-play` skips the DN check if you sign APKs yourself. On an existing app it only
+adds missing pins and leaves every other field alone.
+
 ### publish
 
-Works today (`init` and `add-app` follow). Every step is a hard stop:
+Every step is a hard stop:
 versionCode higher than the published one, identity (aapt2), every signer pinned
 (apksigner, rotation aware, Source Stamp ignored), no `com.pairip` in any dex; then copy in,
 bump the metadata, `fdroid update`, `fdroid deploy`, and read the versionCode back from the
