@@ -181,7 +181,7 @@ def _site(args) -> int:
 
     try:
         res = render(Path(args.repo), Path(args.out))
-        rep = verify(Path(args.repo), res.out)
+        rep = verify(Path(args.repo), Path(res.out).resolve())  # res.out already includes the repo
     except (SiteError, KeyReadError, OSError) as e:
         print(f"fdroidkit site: {e}", file=sys.stderr)
         return 3

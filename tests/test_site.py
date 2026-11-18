@@ -210,3 +210,13 @@ def test_cli_site_and_verify(tmp_path, monkeypatch, capsys):
     assert cli.main(["--repo", str(repo), "verify"]) == 1
     (repo / "repo" / "entry.json").unlink()
     assert cli.main(["--repo", str(repo), "site"]) == 3
+
+
+def test_cli_site_with_a_relative_repo(tmp_path, monkeypatch, capsys):
+    # `--repo fdroid` (as in CI): render() returns fdroid/site, verify() must not
+    # prefix the repo a second time (it scanned fdroid/fdroid/site and found nothing).
+    repo = make_repo(tmp_path)
+    monkeypatch.setattr(keys, "_keytool", fake_runner())
+    monkeypatch.chdir(repo.parent)
+    assert cli.main(["--repo", repo.name, "site"]) == 0
+    assert "verdict: all match" in capsys.readouterr().out
