@@ -22,7 +22,9 @@ PLAY_DN_MARK = "O=Google Inc."
 _PKG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _SIGNER_LINE = re.compile(
-    r"^Signer (#\d+|\([^)\n]*\)) certificate (DN|SHA-256 digest): (.+)$", re.M)
+    # Same shapes as checks._SIGNER_RE: "Signer #1 certificate ..." (build-tools <= 36) and
+    # "V3.0 Signer: certificate ..." (build-tools 37).
+    r"^((?:V\d+(?:\.\d+)? )?Signer(?: #\d+| \([^)\n]*\))?):? certificate (DN|SHA-256 digest): (.+)$", re.M)
 _BADGING_PKG = re.compile(r"name='([^']+)'")
 
 LISTING_FILES = {
@@ -54,7 +56,11 @@ def parse_signer_certs(apksigner_output: str) -> list[tuple[str, str]]:
     by_label: dict[str, dict[str, str]] = {}
     for label, kind, val in _SIGNER_LINE.findall(apksigner_output):
         by_label.setdefault(label, {})[kind] = val.strip()
-    return [(v.get("DN", ""), v["SHA-256 digest"]) for v in by_label.values() if "SHA-256 digest" in v]
+    out: dict[str, str] = {}
+    for v in by_label.values():
+        if "SHA-256 digest" in v:
+            out.setdefault(v["SHA-256 digest"], v.get("DN", ""))
+    return [(dn, digest) for digest, dn in out.items()]
 
 
 def check_play_signers(certs: list[tuple[str, str]]) -> None:

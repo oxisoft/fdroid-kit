@@ -115,3 +115,20 @@ def test_pairip_in_secondary_dex(tmp_path):
 def test_pairip_outside_dex_ignored(tmp_path):
     # Only dex code counts; an asset that mentions the string is not a licence wall.
     checks.check_no_pairip(_apk(tmp_path, {"classes.dex": b"dex", "assets/notes.txt": b"Lcom/pairip/"}))
+
+
+# build-tools 37.0.0 output, verbatim shape from a real Play-signed APK (cybercalc 13).
+APKSIGNER_37 = f"""V3.0 Signer: certificate DN: CN=Android, OU=Android, O=Google Inc., L=Mountain View, ST=California, C=US
+V3.0 Signer: certificate SHA-256 digest: {A}
+V3.0 Signer: certificate SHA-1 digest: e6daf627434854c4ce63d10c765171445c8a7859
+Source Stamp Signer: certificate SHA-256 digest: {C}
+"""
+
+
+def test_parse_signers_build_tools_37():
+    assert checks.parse_signers(APKSIGNER_37) == [A]
+
+
+def test_parse_signers_build_tools_37_rotated_and_dedup():
+    out = APKSIGNER_37 + f"V3.1 Signer (minSdkVersion=33): certificate SHA-256 digest: {B}\nV2 Signer #1: certificate SHA-256 digest: {A}\n"
+    assert checks.parse_signers(out) == [A, B]

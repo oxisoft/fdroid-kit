@@ -7,6 +7,8 @@
   page rendered and verified; Pages artifact uploaded. `examples/github-pages.yml` publishes,
   deploys and checks the live site; demo at oxisoft/fdroid-kit-example. Kit CI runs the action on a
   fixture. `publish --no-deploy` for hosts that take an artifact.
+- Signer parsing understands Android build-tools 37 (`V3.0 Signer: certificate ...`; found on the
+  GitHub runner, which ships 37.0.0): before, every APK was refused with "no signer".
 - **Gitea / Forgejo action works** (`actions/gitea`): installs fdroidkit from the action's own
   checkout into a throwaway venv and runs `publish` with every option as an input. Secrets only as
   env: `PLAY_SA_JSON` goes to a 0600 temp file that is removed afterwards. Kit CI runs it on a

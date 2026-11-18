@@ -16,9 +16,11 @@ class CheckFailed(Exception):
 
 
 _SIGNER_RE = re.compile(
-    # "Signer #1 ..." for one key; "Signer (minSdkVersion=..) ..." per key after a
-    # Play signing-key rotation. Source Stamp lines start differently and are ignored.
-    r"^Signer (?:#\d+|\([^)\n]*\)) certificate SHA-256 digest: ([0-9a-f]{64})",
+    # build-tools <= 36: "Signer #1 ..." for one key, "Signer (minSdkVersion=..) ..." per
+    # key after a Play signing-key rotation. build-tools 37: "V3.0 Signer: certificate ..."
+    # (scheme prefix, colon), "V3.1 Signer ..." for the rotated key. Source Stamp lines
+    # start differently and are ignored.
+    r"^(?:V\d+(?:\.\d+)? )?Signer(?: #\d+| \([^)\n]*\))?:? certificate SHA-256 digest: ([0-9a-f]{64})",
     re.M,
 )
 _PIN_RE = re.compile(r"^\s*-\s*([0-9a-f]{64})\s*$", re.M)
@@ -28,7 +30,7 @@ PAIRIP_MARKER = b"Lcom/pairip/"
 
 def parse_signers(apksigner_output: str) -> list[str]:
     """SHA-256 digests of every signer certificate in `apksigner verify --print-certs`."""
-    return _SIGNER_RE.findall(apksigner_output)
+    return list(dict.fromkeys(_SIGNER_RE.findall(apksigner_output)))
 
 
 def parse_pins(metadata_yml: str) -> list[str]:
