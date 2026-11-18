@@ -73,3 +73,46 @@ jobs:
           test -e "$fx/fdroid/after-update-1" && grep -q "^fdroidkit " "$fx/fdroid/after-update-2"
           test -e "$fx/www/fdroid/repo/com.example.app_13.apk"
           test "$(stat -c %a "$fx/fdroid/repo/com.example.app_13.apk")" = 644
+
+  # The GitHub Pages composite action on the same fixture: key handling, publish without
+  # `fdroid deploy`, and the if: always() wipe. Real fdroidserver + Pages run end to end
+  # in github.com/oxisoft/fdroid-kit-example.
+  github-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fixture repo + APK
+        run: python3 tests/fixtures/action_fixture.py "$RUNNER_TEMP/fx"
+      - name: Dry run
+        uses: ./.github/actions/publish
+        with:
+          package: com.example.app
+          version-code: "13"
+          version-name: "1.3.0"
+          repo-path: ${{ runner.temp }}/fx/fdroid
+          apk: ${{ runner.temp }}/fx/in.apk
+          build-tools: ${{ github.workspace }}/tests/fixtures/bin
+          restore: "false"
+          dry-run: "true"
+      - name: Publish (stand-in fdroid, no Pages)
+        uses: ./.github/actions/publish
+        env:
+          FDROID_KEYSTORE_B64: Zml4dHVyZS1rZXk=
+        with:
+          package: com.example.app
+          version-code: "13"
+          version-name: "1.3.0"
+          repo-path: ${{ runner.temp }}/fx/fdroid
+          apk: ${{ runner.temp }}/fx/in.apk
+          build-tools: ${{ github.workspace }}/tests/fixtures/bin
+          fdroid: ${{ github.workspace }}/tests/fixtures/bin/fdroid
+          restore: "false"
+          pages: "false"
+      - name: Published, no deploy, key wiped
+        run: |
+          fx="$RUNNER_TEMP/fx"
+          grep -q "CurrentVersionCode: 13" "$fx/fdroid/metadata/com.example.app.yml"
+          test -e "$fx/fdroid/repo/com.example.app_13.apk"
+          test "$(cat "$fx/fdroid/fdroid-calls.log")" = update
+          test ! -e "$RUNNER_TEMP/fdroidkit-index.p12"
+          test ! -e "$RUNNER_TEMP/fdroidkit-venv"

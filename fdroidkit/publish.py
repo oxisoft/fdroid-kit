@@ -51,6 +51,7 @@ class Options:
     after_update: list[str] = field(default_factory=list)
     rsync_site: str | None = None
     readback: bool = True
+    deploy: bool = True
     play_sa_file: str | None = None
     readback_attempts: int = 6
     readback_delay: float = 5.0
@@ -250,7 +251,10 @@ def publish(opts: Options, runner: Callable = run, sleep: Callable = time.sleep)
     runner([fdroid, "update"], cwd=repo)
     for cmd in opts.after_update:
         runner(["sh", "-c", cmd], cwd=repo)
-    runner([fdroid, "deploy"], cwd=repo)
+    if opts.deploy:
+        runner([fdroid, "deploy"], cwd=repo)
+    else:
+        log("deploy skipped (--no-deploy): the caller ships repo/ itself, e.g. as a Pages artifact")
     if opts.rsync_site:
         runner(["rsync", "-a", "--exclude", "fdroid", f"{repo}/site/", opts.rsync_site])
     if opts.readback:

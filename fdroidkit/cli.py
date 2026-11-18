@@ -68,6 +68,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="shell command run in the repo after `fdroid update`, e.g. a landing page render (repeatable)")
     s.add_argument("--rsync-site", metavar="DEST", help="rsync <repo>/site/ to DEST after deploy (landing page)")
     s.add_argument("--no-readback", action="store_true", help="skip the live index read-back")
+    s.add_argument("--no-deploy", action="store_true",
+                   help="skip `fdroid deploy` (static hosts that take an artifact, e.g. GitHub Pages)")
 
     s = sub.add_parser("site", help="render the landing page from the signed index")
     s.add_argument("--out", default="site", help="output directory, relative to the repo (default: site)")
@@ -158,7 +160,7 @@ def _publish(args) -> int:
         apk=Path(args.apk) if args.apk else None, dry_run=args.dry_run,
         fdroid=args.fdroid, build_tools=Path(args.build_tools) if args.build_tools else None,
         live_url=args.live_url, after_update=args.after_update, rsync_site=args.rsync_site,
-        readback=not args.no_readback, play_sa_file=args.play_sa_file,
+        readback=not args.no_readback, deploy=not args.no_deploy, play_sa_file=args.play_sa_file,
     )
     try:
         return publish(opts)

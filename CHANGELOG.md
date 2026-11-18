@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- **GitHub Actions + GitHub Pages target** (`.github/actions/publish`): index key from the
+  `FDROID_KEYSTORE_B64` / `FDROID_KEYSTORE_PASS` secrets, written under `$RUNNER_TEMP` with umask 077
+  and shredded in an `if: always()` step; APKs restored from the live index (none in git); landing
+  page rendered and verified; Pages artifact uploaded. `examples/github-pages.yml` publishes,
+  deploys and checks the live site; demo at oxisoft/fdroid-kit-example. Kit CI runs the action on a
+  fixture. `publish --no-deploy` for hosts that take an artifact.
 - **Gitea / Forgejo action works** (`actions/gitea`): installs fdroidkit from the action's own
   checkout into a throwaway venv and runs `publish` with every option as an input. Secrets only as
   env: `PLAY_SA_JSON` goes to a 0600 temp file that is removed afterwards. Kit CI runs it on a

@@ -1,12 +1,32 @@
-name: fdroidkit publish
-description: Publish the Play-signed universal APK of a release to your own F-Droid repo.
-# GitHub Actions composite action:
+name: fdroidkit publish (GitHub Pages)
+description: Publish an APK to an F-Droid repo kept in git and hosted on GitHub Pages.
+# GitHub Actions composite action for a hosted runner. The F-Droid repo working tree
+# (config.yml, metadata/, repo/) lives in the calling repository; the index key comes
+# from secrets, lives only under $RUNNER_TEMP while the job runs and is wiped afterwards.
 #
-#   - uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.0
-#     with: { package: com.example.app, version-code: "42", version-name: "1.4.0" }
+#   - uses: oxisoft/fdroid-kit/.github/actions/publish@main
+#     env:
+#       FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
+#       FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
+#     with:
+#       package: com.example.app
+#       version-code: "42"
+#       version-name: "1.4.0"
+#       source: file
+#       apk: build/app-release.apk
 #
-# Status: skeleton (v0.0.1). The `publish` command lands in v0.1; the hosted-runner
-# key handling (FDROID_KEYSTORE_B64 to $RUNNER_TEMP, wiped afterwards) with it.
+# config.yml reads the key path and passphrases from the environment:
+#   keystore: {env: FDROID_KEYSTORE}       (set by this action)
+#   keystorepass: {env: FDROID_KEYSTORE_PASS}
+#   keypass: {env: FDROID_KEYSTORE_PASS}
+# Secrets only arrive as environment variables, never as inputs (inputs end up in the
+# expanded step script). PLAY_SA_JSON (source play) is handled like the key.
+#
+# With pages: "true" (default) the action renders the landing page and uploads
+# <site>/ + fdroid/repo/ as the Pages artifact; deploy it from a job with
+# actions/deploy-pages (see examples/github-pages.yml). APKs need not live in git:
+# with restore: "true" (default) the action first downloads every APK the live index
+# lists. Commit metadata/ back to the branch (CurrentVersionCode moves on).
 inputs:
   package:
     description: Application id
@@ -18,29 +38,198 @@ inputs:
     description: versionName of the release
     required: true
   repo-path:
-    description: Path of the F-Droid repo working tree
+    description: Path of the F-Droid repo working tree, relative to the workspace
     default: fdroid
   source:
-    description: play | file | github-release
-    default: play
+    description: play | file
+    default: file
+  apk:
+    description: APK path for source file
+    default: ""
+  live-url:
+    description: Public repo URL for the read-back (default repo_url in config.yml)
+    default: ""
+  readback:
+    description: "true = read the live index back (Pages deploys after this action, so default false)"
+    default: "false"
   dry-run:
     description: "true = run every check, publish nothing"
     default: "false"
+  pages:
+    description: "true = render the landing page and upload the Pages artifact"
+    default: "true"
+  restore:
+    description: "true = download the APKs the live index lists into repo/ first, so APKs need not live in git"
+    default: "true"
+  build-tools:
+    description: Android build-tools dir with aapt2 + apksigner (default newest under $ANDROID_HOME)
+    default: ""
+  fdroid:
+    description: fdroid binary (default installs fdroidserver into the action's venv)
+    default: ""
+  fdroidserver-version:
+    description: pip requirement for fdroidserver when fdroid is not given
+    default: fdroidserver>=2.4
+  python-version:
+    description: Python for the action's venv
+    default: "3.12"
 runs:
   using: composite
   steps:
     - uses: actions/setup-python@v5
+      id: py
       with:
-        python-version: "3.12"
+        python-version: ${{ inputs.python-version }}
+
     - name: Install fdroidkit
       shell: bash
-      run: python -m pip install --quiet "${{ github.action_path }}/../../..[play]"
-    - name: Publish
+      env:
+        KIT: ${{ github.action_path }}/../../..
+        PY: ${{ steps.py.outputs.python-path }}
+        IN_FDROID: ${{ inputs.fdroid }}
+        IN_FDROIDSERVER: ${{ inputs.fdroidserver-version }}
+        IN_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+        venv="$RUNNER_TEMP/fdroidkit-venv"
+        rm -rf "$venv"
+        "$PY" -m venv "$venv"
+        "$venv/bin/pip" install --quiet --disable-pip-version-check "$(cd "$KIT" && pwd)[play,site]"
+        if [ -z "$IN_FDROID" ] && [ "$IN_DRY_RUN" != "true" ]; then
+          "$venv/bin/pip" install --quiet --disable-pip-version-check "$IN_FDROIDSERVER"
+        fi
+        "$venv/bin/fdroidkit" --version
+        echo "FDROIDKIT_VENV=$venv" >> "$GITHUB_ENV"
+
+    - name: Restore published APKs from the live repo
+      if: inputs.restore == 'true'
+      shell: bash
+      env:
+        IN_REPO: ${{ inputs.repo-path }}
+        IN_LIVE_URL: ${{ inputs.live-url }}
+      run: |
+        set -euo pipefail
+        "$FDROIDKIT_VENV/bin/python" - <<'PY'
+        import json, os, re, sys, urllib.error, urllib.request
+        from pathlib import Path
+        repo = Path(os.environ["IN_REPO"])
+        url = os.environ.get("IN_LIVE_URL") or ""
+        if not url:
+            m = re.search(r"^repo_url:\s*['\"]?([^'\"\s#]+)", (repo / "config.yml").read_text(), re.M)
+            url = m.group(1) if m else ""
+        if not url:
+            sys.exit("restore: no live URL (live-url input or repo_url in config.yml)")
+        url = url.rstrip("/")
+        try:
+            with urllib.request.urlopen(url + "/index-v2.json", timeout=60) as r:
+                index = json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                print(f"restore: {url}/index-v2.json not found, first publish")
+                sys.exit(0)
+            raise
+        (repo / "repo").mkdir(parents=True, exist_ok=True)
+        n = 0
+        for pkg in index.get("packages", {}).values():
+            for v in pkg.get("versions", {}).values():
+                name = v["file"]["name"].lstrip("/")
+                dest = repo / "repo" / name
+                if "/" in name or dest.exists():
+                    continue
+                print(f"restore: {name}")
+                urllib.request.urlretrieve(f"{url}/{name}", dest)
+                n += 1
+        print(f"restore: {n} APK(s) fetched from {url}")
+        PY
+
+    - name: Index key from secrets
+      if: inputs.dry-run != 'true'
       shell: bash
       run: |
+        set -euo pipefail
+        if [ -z "${FDROID_KEYSTORE_B64:-}" ]; then
+          echo "::error::FDROID_KEYSTORE_B64 is not set (base64 of the index keystore, passed as env: from a secret)"
+          exit 1
+        fi
+        umask 077
+        ks="$RUNNER_TEMP/fdroidkit-index.p12"
+        printf '%s' "$FDROID_KEYSTORE_B64" | base64 -d > "$ks"
+        echo "FDROID_KEYSTORE=$ks" >> "$GITHUB_ENV"
+
+    - name: Publish
+      shell: bash
+      env:
+        IN_PACKAGE: ${{ inputs.package }}
+        IN_CODE: ${{ inputs.version-code }}
+        IN_NAME: ${{ inputs.version-name }}
+        IN_REPO: ${{ inputs.repo-path }}
+        IN_SOURCE: ${{ inputs.source }}
+        IN_APK: ${{ inputs.apk }}
+        IN_LIVE_URL: ${{ inputs.live-url }}
+        IN_READBACK: ${{ inputs.readback }}
+        IN_DRY_RUN: ${{ inputs.dry-run }}
+        IN_BUILD_TOOLS: ${{ inputs.build-tools }}
+        IN_FDROID: ${{ inputs.fdroid }}
+      run: |
+        set -euo pipefail
+        unset FDROID_KEYSTORE_B64
+        args=(--source "$IN_SOURCE" --no-deploy)
+        if [ -n "$IN_APK" ]; then args+=(--apk "$(realpath "$IN_APK")"); fi
+        if [ -n "$IN_LIVE_URL" ]; then args+=(--live-url "$IN_LIVE_URL"); fi
+        if [ -n "$IN_BUILD_TOOLS" ]; then args+=(--build-tools "$IN_BUILD_TOOLS"); fi
+        if [ -n "$IN_FDROID" ]; then
+          args+=(--fdroid "$IN_FDROID")
+        elif [ "$IN_DRY_RUN" != "true" ]; then
+          args+=(--fdroid "$FDROIDKIT_VENV/bin/fdroid")
+        fi
+        if [ "$IN_READBACK" != "true" ]; then args+=(--no-readback); fi
+        if [ "$IN_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+
+        sa_tmp=""
+        cleanup() { if [ -n "$sa_tmp" ]; then rm -f "$sa_tmp"; fi; }
+        trap cleanup EXIT
+        if [ "$IN_SOURCE" = "play" ] && [ -z "${PLAY_SA_FILE:-}" ] && [ -n "${PLAY_SA_JSON:-}" ]; then
+          sa_tmp="$(umask 077 && mktemp "$RUNNER_TEMP/play-sa.XXXXXX")"
+          printf '%s' "$PLAY_SA_JSON" > "$sa_tmp"
+          export PLAY_SA_FILE="$sa_tmp"
+        fi
+        unset PLAY_SA_JSON
+
+        export PATH="$FDROIDKIT_VENV/bin:$PATH"
+        fdroidkit --repo "$IN_REPO" publish "$IN_PACKAGE" "$IN_CODE" "$IN_NAME" "${args[@]}"
+
+    - name: Landing page + Pages tree
+      if: inputs.pages == 'true' && inputs.dry-run != 'true'
+      shell: bash
+      env:
+        IN_REPO: ${{ inputs.repo-path }}
+      run: |
+        set -euo pipefail
         umask 022
-        args=()
-        [ "${{ inputs.dry-run }}" = "true" ] && args+=(--dry-run)
-        python -m fdroidkit --repo "${{ inputs.repo-path }}" publish \
-          "${{ inputs.package }}" "${{ inputs.version-code }}" "${{ inputs.version-name }}" \
-          --source "${{ inputs.source }}" "${args[@]}"
+        export PATH="$FDROIDKIT_VENV/bin:$PATH"
+        fdroidkit --repo "$IN_REPO" site --out site
+        fdroidkit --repo "$IN_REPO" verify --site site
+        out="$RUNNER_TEMP/fdroidkit-pages"
+        rm -rf "$out"
+        mkdir -p "$out/fdroid"
+        cp -a "$IN_REPO/site/." "$out/"
+        cp -a "$IN_REPO/repo" "$out/fdroid/repo"
+        if [ -d "$IN_REPO/archive" ]; then cp -a "$IN_REPO/archive" "$out/fdroid/archive"; fi
+        touch "$out/.nojekyll"
+        echo "FDROIDKIT_PAGES=$out" >> "$GITHUB_ENV"
+
+    - name: Upload Pages artifact
+      if: inputs.pages == 'true' && inputs.dry-run != 'true'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ${{ env.FDROIDKIT_PAGES }}
+
+    - name: Wipe the index key and the venv
+      if: always()
+      shell: bash
+      run: |
+        if [ -n "${FDROID_KEYSTORE:-}" ]; then
+          shred -u "$FDROID_KEYSTORE" 2>/dev/null || rm -f "$FDROID_KEYSTORE"
+        fi
+        rm -f "$RUNNER_TEMP/fdroidkit-index.p12"
+        if [ -n "${FDROIDKIT_VENV:-}" ]; then rm -rf "$FDROIDKIT_VENV"; fi

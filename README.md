@@ -119,12 +119,20 @@ environment variables: `PLAY_SA_JSON` (or `PLAY_SA_FILE`) and the passphrase nam
 `config.yml` reads with `{env: NAME}`. The action installs fdroidkit from its own checkout into a
 throwaway venv, so the runner needs only Python 3.10+, the Android build-tools and fdroidserver.
 
-GitHub:
+GitHub Actions + GitHub Pages (no server at all):
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.0
-  with: { package: com.example.app, version-code: "42", version-name: "1.4.0" }
+- uses: oxisoft/fdroid-kit/.github/actions/publish@main
+  env:
+    FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
+    FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
+  with: { package: com.example.app, version-code: "42", version-name: "1.4.0", source: file, apk: app-release.apk }
 ```
+
+The index key exists only under `$RUNNER_TEMP` (umask 077) for the job and is shredded in an
+`if: always()` step; APKs are restored from the live site, so they never go into git. Then
+`actions/deploy-pages`. Setup and limits: [docs/github-pages.md](docs/github-pages.md); a live
+demo: [oxisoft/fdroid-kit-example](https://github.com/oxisoft/fdroid-kit-example).
 
 Full examples in [examples/](examples/).
 
@@ -133,11 +141,12 @@ Full examples in [examples/](examples/).
 - [Signing model](docs/signing-model.md): the app key is never in the kit, the index key is the only secret.
 - [Play automatic protection](docs/play-protection.md)
 - [Setup traps](docs/setup-traps.md)
+- [GitHub Pages](docs/github-pages.md): repo on a hosted runner + Pages, key from secrets.
 
 ## Roadmap
 
 - v0.1: `publish` (Play and file sources), `site` + `verify`, `init`, `add-app`, both actions.
-- Later: GitHub Release source with self-signed pins, GitHub Pages deploy, Obtainium link,
+- Later: GitHub Release source with self-signed pins, Obtainium link,
   a `doctor` command that audits a live repo.
 
 ## In production

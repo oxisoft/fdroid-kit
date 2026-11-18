@@ -65,6 +65,16 @@ def test_publish_one_key_end_to_end(tmp_path, webroot):
     assert (repo / "fdroid-calls.log").read_text().split() == ["update", "deploy"]
 
 
+def test_publish_no_deploy_skips_fdroid_deploy(tmp_path, webroot):
+    root, _ = webroot
+    repo = make_repo(tmp_path, fx.metadata(fx.PLAY))
+    apk = fx.make_apk(tmp_path / "in.apk", "one_key", PKG, 13, "1.3.0")
+    assert pub.publish(opts(repo, apk, deploy=False, readback=False)) == 0
+    assert (repo / "repo" / f"{PKG}_13.apk").exists()
+    assert not (root / "fdroid" / "repo" / f"{PKG}_13.apk").exists()
+    assert (repo / "fdroid-calls.log").read_text().split() == ["update"]
+
+
 def test_publish_rotated_key_needs_both_pins(tmp_path, webroot):
     _, url = webroot
     apk = fx.make_apk(tmp_path / "in.apk", "rotated", PKG, 13, "1.3.0")
