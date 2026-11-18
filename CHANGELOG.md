@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **Gitea / Forgejo action works** (`actions/gitea`): installs fdroidkit from the action's own
+  checkout into a throwaway venv and runs `publish` with every option as an input. Secrets only as
+  env: `PLAY_SA_JSON` goes to a 0600 temp file that is removed afterwards. Kit CI runs it on a
+  fixture repo (dry run, then a publish with the stand-in fdroid).
 - **`init` and `add-app` work**. `init` creates the index key with keytool (passphrase only from
   an environment variable, never argv or a prompt) and a `config.yml` with `{env: NAME}`
   passphrases, so it can be committed; repo and archive icons land where fdroidserver reads them.

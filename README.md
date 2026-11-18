@@ -108,9 +108,16 @@ accent, org_name, org_url, footer_links, per-app badges, a custom `template`): s
 Gitea / Forgejo:
 
 ```yaml
-- uses: https://g.oxisoft.io/oxisoft/fdroid-kit/actions/gitea@v0.1.0
+- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@main
+  env: { PLAY_SA_JSON: "${{ secrets.PLAY_SA_JSON }}" }
   with: { package: com.example.app, version-code: "42", version-name: "1.4.0", repo-path: /srv/fdroid }
 ```
+
+Inputs: `source` (play | file), `apk`, `live-url`, `after-update` (one command per line),
+`rsync-site`, `readback`, `dry-run`, `build-tools`, `fdroid`, `python`. Secrets only as
+environment variables: `PLAY_SA_JSON` (or `PLAY_SA_FILE`) and the passphrase names your
+`config.yml` reads with `{env: NAME}`. The action installs fdroidkit from its own checkout into a
+throwaway venv, so the runner needs only Python 3.10+, the Android build-tools and fdroidserver.
 
 GitHub:
 

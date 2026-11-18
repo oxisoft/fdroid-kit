@@ -22,3 +22,54 @@ jobs:
       - run: python -m pip install --quiet -e '.[dev]'
       - run: fdroidkit --version
       - run: pytest -q
+
+  # The Gitea/Forgejo composite action, run as a local action on a fixture repo:
+  # a dry run, then a publish with the stand-in fdroid (no Android SDK, no network).
+  gitea-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Fixture repo + APK
+        run: python tests/fixtures/action_fixture.py "$RUNNER_TEMP/fx"
+      - name: Dry run
+        uses: ./actions/gitea
+        with:
+          package: com.example.app
+          version-code: "13"
+          version-name: "1.3.0"
+          repo-path: ${{ runner.temp }}/fx/fdroid
+          source: file
+          apk: ${{ runner.temp }}/fx/in.apk
+          build-tools: ${{ github.workspace }}/tests/fixtures/bin
+          dry-run: "true"
+      - name: Dry run published nothing
+        run: |
+          grep -q "CurrentVersionCode: 12" "$RUNNER_TEMP/fx/fdroid/metadata/com.example.app.yml"
+          test ! -e "$RUNNER_TEMP/fx/fdroid/repo/com.example.app_13.apk"
+      - name: Publish (stand-in fdroid, no read-back)
+        uses: ./actions/gitea
+        env:
+          FAKE_WEBROOT: ${{ runner.temp }}/fx/www
+        with:
+          package: com.example.app
+          version-code: "13"
+          version-name: "1.3.0"
+          repo-path: ${{ runner.temp }}/fx/fdroid
+          source: file
+          apk: ${{ runner.temp }}/fx/in.apk
+          build-tools: ${{ github.workspace }}/tests/fixtures/bin
+          fdroid: ${{ github.workspace }}/tests/fixtures/bin/fdroid
+          after-update: |
+            touch after-update-1
+            fdroidkit --version > after-update-2
+          readback: "false"
+      - name: Published
+        run: |
+          fx="$RUNNER_TEMP/fx"
+          grep -q "CurrentVersionCode: 13" "$fx/fdroid/metadata/com.example.app.yml"
+          test -e "$fx/fdroid/after-update-1" && grep -q "^fdroidkit " "$fx/fdroid/after-update-2"
+          test -e "$fx/www/fdroid/repo/com.example.app_13.apk"
+          test "$(stat -c %a "$fx/fdroid/repo/com.example.app_13.apk")" = 644

@@ -22,11 +22,18 @@ jobs:
           echo "name=${tag%+*}" >> "$GITHUB_OUTPUT"
           echo "code=${tag#*+}" >> "$GITHUB_OUTPUT"
       - name: Publish to F-Droid
-        uses: https://g.oxisoft.io/oxisoft/fdroid-kit/actions/gitea@v0.1.0
+        # Secrets only as env: the Play service account (written to a 0600 temp file and
+        # removed) and the index key passphrases config.yml reads with {env: NAME}.
+        uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@main
         env:
-          PLAY_SA_FILE: ${{ runner.temp }}/play-sa.json
+          PLAY_SA_JSON: ${{ secrets.PLAY_SA_JSON }}
+          FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
+          FDROID_KEY_PASS: ${{ secrets.FDROID_KEY_PASS }}
         with:
           package: com.example.app
           version-code: ${{ steps.v.outputs.code }}
           version-name: ${{ steps.v.outputs.name }}
           repo-path: /srv/fdroid
+          # optional: rebuild the landing page, then copy it next to the repo
+          after-update: fdroidkit site
+          rsync-site: www@web:/var/www/fdroid.example.com/

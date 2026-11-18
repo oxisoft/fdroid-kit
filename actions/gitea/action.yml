@@ -1,12 +1,24 @@
 name: fdroidkit publish
 description: Publish the Play-signed universal APK of a release to your own F-Droid repo.
-# Gitea / Forgejo Actions composite action. Call it from an app repo's release job
+# Gitea / Forgejo Actions composite action, for a self-hosted runner that holds the
+# F-Droid repo working tree and its index key. Call it from an app's release job
 # after the Play upload:
 #
-#   - uses: https://g.oxisoft.io/oxisoft/fdroid-kit/actions/gitea@v0.1.0
-#     with: { package: com.example.app, version-code: "42", version-name: "1.4.0" }
+#   - uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@main
+#     env:
+#       PLAY_SA_JSON: ${{ secrets.PLAY_SA_JSON }}
+#     with:
+#       package: com.example.app
+#       version-code: "42"
+#       version-name: "1.4.0"
+#       repo-path: /srv/fdroid
 #
-# Status: skeleton (v0.0.1). The `publish` command lands in v0.1.
+# Secrets only arrive as environment variables, never as inputs (inputs end up in
+# the expanded step script):
+#   PLAY_SA_JSON   service-account JSON (source play); written to a 0600 temp file
+#                  and deleted afterwards. PLAY_SA_FILE (a path) works as well.
+#   index key passphrases: whatever names config.yml reads with `{env: NAME}`
+#                  (`fdroidkit init` writes FDROID_KEYSTORE_PASS / FDROID_KEY_PASS).
 inputs:
   package:
     description: Application id
@@ -18,26 +30,102 @@ inputs:
     description: versionName of the release
     required: true
   repo-path:
-    description: Path of the F-Droid repo working tree on the runner (self-hosted model)
+    description: Path of the F-Droid repo working tree on the runner
     required: true
   source:
-    description: play | file | github-release
+    description: play | file
     default: play
+  apk:
+    description: APK path for source file
+    default: ""
+  live-url:
+    description: Public repo URL for the read-back (default repo_url in config.yml)
+    default: ""
+  after-update:
+    description: Shell commands run in the repo after `fdroid update`, one per line (e.g. `fdroidkit site`)
+    default: ""
+  rsync-site:
+    description: rsync <repo>/site/ to this destination after deploy
+    default: ""
+  readback:
+    description: "false = skip the live index read-back"
+    default: "true"
   dry-run:
     description: "true = run every check, publish nothing"
     default: "false"
+  build-tools:
+    description: Android build-tools dir with aapt2 + apksigner (default newest under the SDK)
+    default: ""
+  fdroid:
+    description: fdroid binary (default fdroid on PATH, then ~/.local/bin/fdroid)
+    default: ""
+  python:
+    description: Python used to create the action's venv
+    default: python3
 runs:
   using: composite
   steps:
     - name: Install fdroidkit
       shell: bash
-      run: python3 -m pip install --user --quiet "fdroidkit[play] @ git+https://github.com/oxisoft/fdroid-kit@${{ github.action_ref || 'main' }}"
+      env:
+        KIT: ${{ github.action_path }}/../..
+        PY: ${{ inputs.python }}
+      run: |
+        set -euo pipefail
+        venv="${RUNNER_TEMP:-/tmp}/fdroidkit-venv-${GITHUB_RUN_ID:-local}"
+        rm -rf "$venv"
+        "$PY" -m venv "$venv"
+        "$venv/bin/pip" install --quiet --disable-pip-version-check "$(cd "$KIT" && pwd)[play,site]"
+        "$venv/bin/fdroidkit" --version
+        echo "FDROIDKIT_VENV=$venv" >> "$GITHUB_ENV"
+
     - name: Publish
       shell: bash
+      env:
+        IN_PACKAGE: ${{ inputs.package }}
+        IN_CODE: ${{ inputs.version-code }}
+        IN_NAME: ${{ inputs.version-name }}
+        IN_REPO: ${{ inputs.repo-path }}
+        IN_SOURCE: ${{ inputs.source }}
+        IN_APK: ${{ inputs.apk }}
+        IN_LIVE_URL: ${{ inputs.live-url }}
+        IN_AFTER_UPDATE: ${{ inputs.after-update }}
+        IN_RSYNC_SITE: ${{ inputs.rsync-site }}
+        IN_READBACK: ${{ inputs.readback }}
+        IN_DRY_RUN: ${{ inputs.dry-run }}
+        IN_BUILD_TOOLS: ${{ inputs.build-tools }}
+        IN_FDROID: ${{ inputs.fdroid }}
       run: |
-        umask 022
-        args=()
-        [ "${{ inputs.dry-run }}" = "true" ] && args+=(--dry-run)
-        python3 -m fdroidkit --repo "${{ inputs.repo-path }}" publish \
-          "${{ inputs.package }}" "${{ inputs.version-code }}" "${{ inputs.version-name }}" \
-          --source "${{ inputs.source }}" "${args[@]}"
+        set -euo pipefail
+        args=(--source "$IN_SOURCE")
+        if [ -n "$IN_APK" ]; then args+=(--apk "$IN_APK"); fi
+        if [ -n "$IN_LIVE_URL" ]; then args+=(--live-url "$IN_LIVE_URL"); fi
+        if [ -n "$IN_RSYNC_SITE" ]; then args+=(--rsync-site "$IN_RSYNC_SITE"); fi
+        if [ -n "$IN_BUILD_TOOLS" ]; then args+=(--build-tools "$IN_BUILD_TOOLS"); fi
+        if [ -n "$IN_FDROID" ]; then args+=(--fdroid "$IN_FDROID"); fi
+        if [ "$IN_READBACK" = "false" ]; then args+=(--no-readback); fi
+        if [ "$IN_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+        while IFS= read -r cmd; do
+          if [ -n "${cmd// }" ]; then args+=(--after-update "$cmd"); fi
+        done <<< "$IN_AFTER_UPDATE"
+
+        sa_tmp=""
+        cleanup() { if [ -n "$sa_tmp" ]; then rm -f "$sa_tmp"; fi; }
+        trap cleanup EXIT
+        if [ "$IN_SOURCE" = "play" ] && [ -z "${PLAY_SA_FILE:-}" ] && [ -n "${PLAY_SA_JSON:-}" ]; then
+          sa_tmp="$(umask 077 && mktemp "${RUNNER_TEMP:-/tmp}/play-sa.XXXXXX")"
+          printf '%s' "$PLAY_SA_JSON" > "$sa_tmp"
+          export PLAY_SA_FILE="$sa_tmp"
+        fi
+        unset PLAY_SA_JSON
+
+        # after-update commands may call `fdroidkit site`: the venv goes first on PATH.
+        export PATH="$FDROIDKIT_VENV/bin:$PATH"
+        # fdroidkit publishes under umask 022 itself (served files must be world-readable).
+        fdroidkit --repo "$IN_REPO" publish \
+          "$IN_PACKAGE" "$IN_CODE" "$IN_NAME" "${args[@]}"
+
+    - name: Remove the venv
+      if: always()
+      shell: bash
+      run: if [ -n "${FDROIDKIT_VENV:-}" ]; then rm -rf "$FDROIDKIT_VENV"; fi
