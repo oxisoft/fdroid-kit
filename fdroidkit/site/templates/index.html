@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>$title</title>
+  <meta name="description" content="$description">
+  <link rel="canonical" href="$canonical">
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="site.css">
+  <meta property="og:title" content="$title">
+  <meta property="og:description" content="$description">
+  <meta property="og:url" content="$canonical">
+  <script type="application/ld+json">$jsonld</script>
+</head>
+<body>
+  <header class="top">
+    $logo
+    <div>
+      <h1>$title</h1>
+      <p class="lead">$description</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="card add" aria-labelledby="add-h">
+      <h2 id="add-h">Add this repository to F-Droid</h2>
+      <div class="addgrid">
+        $qr
+        <ol>
+          <li>Install <a href="https://f-droid.org/">F-Droid</a> (or a client like Neo Store or Droid-ify).</li>
+          <li>On the phone, tap <a href="$add_url">this link</a> or scan the QR code.</li>
+          <li>Or add it by hand in Settings, Repositories, +: <code>$address</code></li>
+          <li>Check that the fingerprint matches before you confirm.</li>
+        </ol>
+      </div>
+      <p class="fp"><span>Signing key fingerprint (SHA-256)</span>
+        <code>$fingerprint_grouped</code></p>
+    </section>
+
+    <section aria-labelledby="apps-h">
+      <h2 id="apps-h">$app_heading</h2>
+      <div class="card applist">
+$apps
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>$org $footer_links</p>
+    <p class="small">Index updated $updated. Built with <a href="https://github.com/oxisoft/fdroid-kit">fdroid-kit</a>.</p>
+  </footer>
+</body>
+</html>

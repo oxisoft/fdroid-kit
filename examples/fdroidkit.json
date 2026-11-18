@@ -1,0 +1,17 @@
+{
+  "site": {
+    "title": "Example Apps",
+    "description": "Android apps by Example, installable without a Google account.",
+    "site_url": "https://fdroid.example.com",
+    "accent": "#2F6FEB",
+    "org_name": "Example",
+    "org_url": "https://example.com",
+    "footer_links": [
+      {"label": "Privacy", "url": "https://example.com/privacy"},
+      {"label": "Get F-Droid", "url": "https://f-droid.org/"}
+    ],
+    "badges": {
+      "com.example.app": {"category": "Puzzle", "tags": ["offline", "no ads"]}
+    }
+  }
+}

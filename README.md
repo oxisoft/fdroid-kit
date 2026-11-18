@@ -36,7 +36,7 @@ fdroidkit verify        # every fingerprint on the page matches the index key
 
 ### publish
 
-Works today (`init`, `add-app`, `site`, `verify` follow). Every step is a hard stop:
+Works today (`init` and `add-app` follow). Every step is a hard stop:
 versionCode higher than the published one, identity (aapt2), every signer pinned
 (apksigner, rotation aware, Source Stamp ignored), no `com.pairip` in any dex; then copy in,
 bump the metadata, `fdroid update`, `fdroid deploy`, and read the versionCode back from the
@@ -45,12 +45,35 @@ live `index-v2.json`. `--dry-run` stops after the checks.
 ```
 fdroidkit --repo /srv/fdroid publish com.example.app 42 1.4.0 --source play --play-sa-file sa.json
 fdroidkit --repo /srv/fdroid publish com.example.app 42 1.4.0 --source file --apk app.apk \
-    --after-update "python3 render_site.py" --rsync-site host:/var/www/fdroid/
+    --after-update "fdroidkit site" --rsync-site host:/var/www/fdroid/
 ```
 
 Tools are found on their own: build-tools from `--build-tools`, `$ANDROID_HOME`, `sdk_path` in
 config.yml or `~/android`; `fdroid` on PATH; the live URL from `repo_url`. Exit codes: 0 ok,
 1 the APK was refused, 3 setup error. `--source play` needs `pip install 'fdroidkit[play]'`.
+
+### site and verify
+
+```
+fdroidkit --repo /srv/fdroid site            # writes /srv/fdroid/site/
+fdroidkit --repo /srv/fdroid verify --live   # key from the live entry.jar
+```
+
+`site` renders a static landing page (index.html, site.css, qr.svg, app icons, llms.txt,
+sitemap.xml, robots.txt) from `repo/index-v2.json`, and only after checking its SHA-256 against
+the signed `entry.json`: the page cannot list an app the repo does not serve. The fingerprint and
+the add-repo QR come from the certificate that signed `entry.jar` (read with `keytool`), never from
+a config value, so no keystore password is needed. The page passes a strict CSP (no inline script
+or style). `site` ends with a `verify`.
+
+`verify` finds every SHA-256 fingerprint on the page and in llms.txt, compares each with the key
+(local `repo/entry.jar`, or `--live [URL]` for the deployed one) and regenerates the QR from the
+page's add-repo link to compare it with qr.svg. Exit 1 on any mismatch: run it before every deploy.
+
+Branding is optional, in `<repo>/fdroidkit.json` under `site` (title, description, site_url,
+accent, org_name, org_url, footer_links, per-app badges, a custom `template`): see
+[examples/fdroidkit.json](examples/fdroidkit.json). The QR needs `pip install 'fdroidkit[site]'`
+(qrcode; Pillow also downscales the icons).
 
 ## In CI
 

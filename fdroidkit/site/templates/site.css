@@ -1,0 +1,55 @@
+/* fdroid-kit neutral theme. $accent comes from fdroidkit.json site.accent. */
+:root {
+  --accent: $accent;
+  --bg: #ffffff;
+  --fg: #1b1f24;
+  --muted: #5b636e;
+  --card: #f5f7fa;
+  --line: #dfe3e8;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0f1216; --fg: #e6e9ed; --muted: #9aa3ad; --card: #171b21; --line: #2a3038; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto; max-width: 860px; padding: 24px 16px 48px;
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--fg);
+}
+a { color: var(--accent); }
+h1 { margin: 0; font-size: 1.8rem; }
+h2 { font-size: 1.2rem; margin: 32px 0 12px; }
+.top { display: flex; gap: 16px; align-items: center; }
+.logo { border-radius: 14px; flex: none; }
+.lead { margin: 4px 0 0; color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.add h2 { margin-top: 0; }
+.addgrid { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.qr img { background: #fff; border-radius: 8px; padding: 6px; display: block; }
+.addgrid ol { margin: 0; padding-left: 20px; flex: 1 1 280px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; overflow-wrap: anywhere; }
+.fp { margin: 16px 0 0; }
+.fp span { display: block; color: var(--muted); font-size: 0.85rem; }
+.fp code { font-size: 0.95rem; letter-spacing: 0.02em; }
+.applist { padding: 0; }
+.app { display: flex; gap: 16px; align-items: flex-start; padding: 16px; border-top: 1px solid var(--line); }
+.app:first-child { border-top: 0; }
+.app img { border-radius: 16px; flex: none; }
+.appmeta { flex: 1; min-width: 0; }
+.appmeta p { margin: 2px 0 6px; }
+.appver { color: var(--muted); font-size: 0.85rem; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.badge { font-size: 0.75rem; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.badge.cat { border-color: var(--accent); color: var(--accent); }
+details { margin-top: 6px; }
+summary { cursor: pointer; color: var(--accent); }
+.applink {
+  flex: none; align-self: center; text-decoration: none; font-weight: 600;
+  border: 1px solid var(--accent); border-radius: 8px; padding: 6px 12px;
+}
+footer { margin-top: 40px; color: var(--muted); font-size: 0.9rem; }
+.small { font-size: 0.8rem; }
+@media (max-width: 560px) {
+  .app { flex-wrap: wrap; }
+  .applink { align-self: flex-start; }
+}

@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **`site` and `verify` work**: a neutral, CSP-clean landing page from the signed index
+  (index-v2.json is refused unless entry.json vouches for it), fingerprint and add-repo QR (SVG)
+  from the certificate that signed entry.jar, brand via `fdroidkit.json`, llms.txt, sitemap,
+  JSON-LD. `verify` checks every printed fingerprint and the QR against the local or live key.
 - **`publish` works** (`--source play|file`, `--dry-run`): ported from the script that ships
   OxiSoft's apps to fdroid.oxisoft.io, every path a parameter. Play source waits for Play to
   generate the universal APK. Public files written under umask 022 (a 0600 entry.jar is a 403).

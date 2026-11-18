@@ -14,8 +14,6 @@ from . import __version__
 NOT_YET = {
     "init": "0.1",
     "add-app": "0.1",
-    "site": "0.1",
-    "verify": "0.1",
 }
 
 
@@ -58,9 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-readback", action="store_true", help="skip the live index read-back")
 
     s = sub.add_parser("site", help="render the landing page from the signed index")
-    s.add_argument("--out", default="site", help="output directory")
+    s.add_argument("--out", default="site", help="output directory, relative to the repo (default: site)")
 
-    sub.add_parser("verify", help="check that every fingerprint on the landing page matches the index key")
+    s = sub.add_parser("verify", help="check that every fingerprint on the landing page matches the index key")
+    s.add_argument("--site", default="site", help="landing page directory, relative to the repo (default: site)")
+    s.add_argument("--live", nargs="?", const="config", metavar="URL",
+                   help="take the key from the live entry.jar (default URL: repo_url in config.yml)")
     return p
 
 
@@ -72,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "publish":
         return _publish(args)
+    if args.command == "site":
+        return _site(args)
+    if args.command == "verify":
+        return _verify(args)
     print(f"fdroidkit {args.command}: not implemented yet (planned for {NOT_YET[args.command]}).",
           file=sys.stderr)
     return 2
@@ -99,6 +104,47 @@ def _publish(args) -> int:
     except (PublishError, RuntimeError) as e:
         print(f"fdroidkit publish: {e}", file=sys.stderr)
         return 3
+
+
+def _site(args) -> int:
+    from pathlib import Path
+
+    from .site.keys import KeyReadError
+    from .site.render import SiteError, render
+    from .site.verify import verify
+
+    try:
+        res = render(Path(args.repo), Path(args.out))
+        rep = verify(Path(args.repo), res.out)
+    except (SiteError, KeyReadError, OSError) as e:
+        print(f"fdroidkit site: {e}", file=sys.stderr)
+        return 3
+    print(f"rendered {len(res.apps)} app(s) into {res.out}: {', '.join(res.apps)}")
+    print(f"fingerprint {res.fingerprint}, QR {'yes' if res.qr else 'no'}")
+    print("\n".join(rep.lines()))
+    return 0 if rep.ok else 1
+
+
+def _verify(args) -> int:
+    from pathlib import Path
+
+    from .publish import read_config
+    from .site.keys import KeyReadError
+    from .site.verify import verify
+
+    live = args.live
+    if live == "config":
+        live = read_config(Path(args.repo)).get("repo_url")
+        if not live:
+            print("fdroidkit verify: --live needs a URL or repo_url in config.yml", file=sys.stderr)
+            return 3
+    try:
+        rep = verify(Path(args.repo), Path(args.site), live_address=live)
+    except (KeyReadError, OSError) as e:
+        print(f"fdroidkit verify: {e}", file=sys.stderr)
+        return 3
+    print("\n".join(rep.lines()))
+    return 0 if rep.ok else 1
 
 
 if __name__ == "__main__":

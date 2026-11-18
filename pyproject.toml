@@ -22,7 +22,8 @@ dependencies = []
 
 [project.optional-dependencies]
 play = ["google-api-python-client", "google-auth"]
-dev = ["pytest"]
+site = ["qrcode", "pillow"]
+dev = ["pytest", "qrcode"]
 
 [project.scripts]
 fdroidkit = "fdroidkit.cli:main"
