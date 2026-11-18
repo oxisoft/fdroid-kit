@@ -220,3 +220,11 @@ def test_cli_site_with_a_relative_repo(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(repo.parent)
     assert cli.main(["--repo", repo.name, "site"]) == 0
     assert "verdict: all match" in capsys.readouterr().out
+
+
+def test_qr_check_ignores_svg_serialisation():
+    from fdroidkit.site import verify as v
+    a = '<svg><rect x="0" /><path d="M2,2H3V3H2z" /></svg>'
+    b = '<svg><rect x="0"/><path d="M2,2H3V3H2z"/></svg>'
+    assert v._qr_modules(a) == v._qr_modules(b) == ["M2,2H3V3H2z"]
+    assert v._qr_modules(a) != v._qr_modules('<svg><path d="M2,2H4V3H2z"/></svg>')

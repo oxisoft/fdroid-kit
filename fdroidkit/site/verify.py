@@ -91,4 +91,10 @@ def _check_qr(site: Path, key: str) -> str:
     fresh = qr_svg(add_url)
     if fresh is None:
         return "skipped"
-    return "ok" if fresh == svg.read_text() else "mismatch"
+    return "ok" if _qr_modules(fresh) == _qr_modules(svg.read_text()) else "mismatch"
+
+
+def _qr_modules(svg: str) -> list[str]:
+    """The drawn modules (path data) of a QR SVG. Bytes differ between Python versions
+    (ElementTree writes `"/>` on 3.12, `" />` on 3.13), the modules do not."""
+    return re.findall(r'\sd="([^"]*)"', svg)

@@ -11,6 +11,8 @@
   GitHub runner, which ships 37.0.0): before, every APK was refused with "no signer".
 - `site` with a relative `--repo` no longer fails its own check ("NO fingerprint found"): it
   scanned `<repo>/<repo>/site`.
+- `verify` compares the QR by its modules, not bytes: the same QR serialises differently on
+  Python 3.12 and 3.13, so a page built on one failed the live check run on the other.
 - **Gitea / Forgejo action works** (`actions/gitea`): installs fdroidkit from the action's own
   checkout into a throwaway venv and runs `publish` with every option as an input. Secrets only as
   env: `PLAY_SA_JSON` goes to a 0600 temp file that is removed afterwards. Kit CI runs it on a
