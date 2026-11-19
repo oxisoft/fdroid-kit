@@ -7,8 +7,44 @@ adds it to your F-Droid repo, deploys it and reads it back from the live index. 
 install from F-Droid and update from Play, or the other way round, because both channels ship the
 same Google-signed APK.
 
-> Status: **v0.0.1, pre-release.** All five commands work and are tested; the CI actions and the
-> first tagged release (v0.1) come next.
+> Status: **v0.1.0**, first release. Five commands and two CI actions, tested on real Play-signed
+> APKs. See the [CHANGELOG](CHANGELOG.md).
+
+## Quickstart
+
+On your own server (Gitea / Forgejo runner, nginx serving the repo). Needs Python 3.10+, a JDK
+(`keytool`), the Android build-tools and [fdroidserver](https://f-droid.org/docs/Installing_the_Server_and_Repo_Tools/).
+
+```
+pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.0"
+export FDROID_KEYSTORE_PASS="$(head -c 32 /dev/urandom | base64)"   # store it in your password manager
+fdroidkit --repo fdroid init --name "Example Apps" --url https://fdroid.example.com/fdroid/repo
+fdroidkit --repo fdroid add-app com.example.app --discover-signer universal.apk
+fdroidkit --repo fdroid publish com.example.app 42 1.4.0 --source file --apk universal.apk --dry-run
+fdroidkit --repo fdroid publish com.example.app 42 1.4.0 --source file --apk universal.apk
+fdroidkit --repo fdroid site
+```
+
+`universal.apk` is the Play-signed universal APK from Play Console (App bundle explorer). What you
+should see, in short:
+
+```
+init      fingerprint 2c3374e1...   BACK UP the keystore and the passphrase now
+add-app   signer found: b3afc17d...  wrote metadata/com.example.app.yml with 1 pinned signer(s)
+publish   signer pinned OK (1 signer) / no pairip licence check / dry run: all checks passed
+publish   + fdroid update ... published com.example.app 1.4.0 (42)
+site      qr.svg: ok / verdict: all match
+```
+
+Set `serverwebroot` in `fdroid/config.yml` so `publish` deploys and reads the live index back
+(without it, add `--no-deploy --no-readback` for a local try). Then automate it with the
+[Gitea / Forgejo action](#in-ci).
+
+On GitHub with no server: copy [examples/github-pages.yml](examples/github-pages.yml) into a new
+repo, run `init` once locally, put the key into the `FDROID_KEYSTORE_B64` and `FDROID_KEYSTORE_PASS`
+secrets, commit `config.yml` and `metadata/`, enable Pages (source: GitHub Actions) and run the
+workflow. Step by step: [docs/github-pages.md](docs/github-pages.md); working demo:
+[oxisoft/fdroid-kit-example](https://github.com/oxisoft/fdroid-kit-example).
 
 ## Why another F-Droid tool
 
@@ -108,7 +144,7 @@ accent, org_name, org_url, footer_links, per-app badges, a custom `template`): s
 Gitea / Forgejo:
 
 ```yaml
-- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@main
+- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.0
   env: { PLAY_SA_JSON: "${{ secrets.PLAY_SA_JSON }}" }
   with: { package: com.example.app, version-code: "42", version-name: "1.4.0", repo-path: /srv/fdroid }
 ```
@@ -122,7 +158,7 @@ throwaway venv, so the runner needs only Python 3.10+, the Android build-tools a
 GitHub Actions + GitHub Pages (no server at all):
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@main
+- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.0
   env:
     FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
     FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}

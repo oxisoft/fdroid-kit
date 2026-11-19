@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 (2026-11-19)
+
+First release. Everything you need to run an F-Droid repo for apps that are also on Google Play:
+
+- Five commands: `init` (index key + a secret-free `config.yml`), `add-app` (metadata + Play
+  signer pin), `publish` (Play or file source, hard checks, update, deploy, live read-back),
+  `site` (landing page with fingerprint and add-repo QR from the signed index) and `verify`.
+- Two CI targets: a Gitea / Forgejo composite action for your own server, and a GitHub Actions
+  + GitHub Pages action that needs no server at all.
+- Pin actions to `@v0.1.0`; the docs and examples do.
+
+Details of the work that went in:
 - **GitHub Actions + GitHub Pages target** (`.github/actions/publish`): index key from the
   `FDROID_KEYSTORE_B64` / `FDROID_KEYSTORE_PASS` secrets, written under `$RUNNER_TEMP` with umask 077
   and shredded in an `if: always()` step; APKs restored from the live index (none in git); landing
@@ -34,7 +45,6 @@
 - Fixture tests: generated one-key, rotated-key, pairip and stranger APKs, stand-in aapt2 /
   apksigner / fdroid, deploy into a local web root and read-back over HTTP.
 
-## 0.0.1 (unreleased)
-- Repo skeleton: package layout, CLI surface (`init`, `add-app`, `publish`, `site`, `verify`),
+- Repo skeleton (0.0.1, never tagged): package layout, CLI surface (`init`, `add-app`, `publish`, `site`, `verify`),
   APK checks (identity, signer pins incl. rotated keys, versionCode, Play automatic protection)
   with tests, Gitea and GitHub composite actions, docs, examples, CI.
