@@ -76,7 +76,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7
       id: py
       with:
         python-version: ${{ inputs.python-version }}
@@ -220,9 +220,10 @@ runs:
 
     - name: Upload Pages artifact
       if: inputs.pages == 'true' && inputs.dry-run != 'true'
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v5
       with:
         path: ${{ env.FDROIDKIT_PAGES }}
+        include-hidden-files: true
 
     - name: Wipe the index key and the venv
       if: always()

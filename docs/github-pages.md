@@ -56,7 +56,7 @@ versionName and the URL of the signed APK, or call the action from your app's re
     apk: build/app/outputs/flutter-apk/app-release.apk
 ```
 
-followed by a job with `actions/deploy-pages@v4` (environment `github-pages`, permissions
+followed by a job with `actions/deploy-pages@v5` (environment `github-pages`, permissions
 `pages: write` + `id-token: write`).
 
 What the action does: installs fdroidkit + fdroidserver in a venv, restores the APKs the

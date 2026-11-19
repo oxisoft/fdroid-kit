@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Node 24 ready: the GitHub action and examples use `actions/setup-python@v7`,
+  `actions/checkout@v7`, `actions/upload-pages-artifact@v5` (with `include-hidden-files`, so
+  `.nojekyll` still ships) and `actions/deploy-pages@v5`. GitHub deprecated the Node 20 versions.
+
 ## 0.1.0 (2026-11-19)
 
 First release. Everything you need to run an F-Droid repo for apps that are also on Google Play:
