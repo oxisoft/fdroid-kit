@@ -113,7 +113,7 @@ def render_metadata(o: AddAppOptions, pins: list[str], source_note: str) -> str:
         "",
         f"# {source_note}",
         "# Every APK signer must be listed here or `fdroidkit publish` and `fdroid update` refuse",
-        "# the APK. After a Play signing-key rotation, add the new digest next to the old one.",
+        "# the APK. After a signing-key rotation, add the new digest next to the old one.",
         "AllowedAPKSigningKeys:",
         *[f"  - {p}" for p in pins],
         "",
