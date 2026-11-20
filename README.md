@@ -68,6 +68,7 @@ fdroidkit add-app com.example.app --discover-signer app.apk
 fdroidkit publish com.example.app 42 1.4.0 --source play [--dry-run]
 fdroidkit site          # landing page with fingerprint and add-repo QR, from the signed index
 fdroidkit verify        # every fingerprint on the page matches the index key
+fdroidkit doctor --url https://fdroid.example.com/fdroid/repo   # audit the live repo
 ```
 
 ### init
@@ -139,6 +140,20 @@ accent, org_name, org_url, footer_links, per-app badges, a custom `template`): s
 [examples/fdroidkit.json](examples/fdroidkit.json). The QR needs `pip install 'fdroidkit[site]'`
 (qrcode; Pillow also downscales the icons).
 
+### doctor
+
+```
+fdroidkit doctor --url https://fdroid.example.com/fdroid/repo [--repo /srv/fdroid] [--json]
+```
+
+Audits the repo your users actually reach, not your working tree: the TLS certificate (more than
+14 days left), the `entry.jar` signature, the served index-v2.json against the signed entry.json,
+the index-v1.jar signer, the index age, every fingerprint on the landing page, the add-repo link
+and qr.svg, each app's signers (pinned in `--repo` metadata, same across versions), Play automatic
+protection in the newest APK of each app (only the dex entries are fetched, by HTTP Range), and
+whether the live versionCode lags the local metadata or index. Exit 0 healthy (warnings allowed),
+1 any failure, 3 the repo could not be read. Details: [docs/doctor.md](docs/doctor.md).
+
 ## In CI
 
 Gitea / Forgejo:
@@ -178,12 +193,13 @@ Full examples in [examples/](examples/).
 - [Play automatic protection](docs/play-protection.md)
 - [Setup traps](docs/setup-traps.md)
 - [GitHub Pages](docs/github-pages.md): repo on a hosted runner + Pages, key from secrets.
+- [doctor](docs/doctor.md): what each live check reads and how to fix a failure.
 
 ## Roadmap
 
 - v0.1: `publish` (Play and file sources), `site` + `verify`, `init`, `add-app`, both actions.
-- Later: GitHub Release source with self-signed pins, Obtainium link,
-  a `doctor` command that audits a live repo.
+- Next: `doctor` (live repo audit, in main).
+- Later: GitHub Release source with self-signed pins, Obtainium link.
 
 ## In production
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **`fdroidkit doctor`**: one command that audits a live repo: TLS expiry, entry.jar signature,
+  index-v2.json vs the signed entry.json, index-v1.jar signer, index age, landing page
+  fingerprints, add-repo link and QR, signer pins (with `--repo`), Play automatic protection in
+  the newest APK of each app (HTTP Range, no full download) and versionCode lag. Table or
+  `--json`, exit 1 on any failure.
 - Node 24 ready: the GitHub action and examples use `actions/setup-python@v7`,
   `actions/checkout@v7`, `actions/upload-pages-artifact@v5` (with `include-hidden-files`, so
   `.nojekyll` still ships) and `actions/deploy-pages@v5`. GitHub deprecated the Node 20 versions.

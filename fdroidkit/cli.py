@@ -78,6 +78,17 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--site", default="site", help="landing page directory, relative to the repo (default: site)")
     s.add_argument("--live", nargs="?", const="config", metavar="URL",
                    help="take the key from the live entry.jar (default URL: repo_url in config.yml)")
+
+    s = sub.add_parser("doctor", help="audit a live repo: TLS, index signature, landing page, pins, pairip, versions")
+    s.add_argument("--url", help="public repo URL (default: repo_url in config.yml of --repo)")
+    s.add_argument("--repo", dest="doctor_repo", metavar="DIR",
+                   help="local repo working tree: check signers against its pins and versions against its "
+                        "metadata (without it only the live repo is read)")
+    s.add_argument("--site-url", help="landing page URL (default: fdroidkit.json site_url, else the repo URL "
+                   "without /fdroid/repo)")
+    s.add_argument("--no-apk", action="store_true", help="skip the APK pairip scan (no APK bytes read)")
+    s.add_argument("--all-versions", action="store_true", help="scan every served APK, not only the newest per app")
+    s.add_argument("--json", action="store_true", help="machine-readable report on stdout")
     return p
 
 
@@ -97,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
         return _site(args)
     if args.command == "verify":
         return _verify(args)
+    if args.command == "doctor":
+        return _doctor(args)
     print(f"fdroidkit {args.command}: not implemented yet (planned for {NOT_YET.get(args.command, 'later')}).",
           file=sys.stderr)
     return 2
@@ -210,6 +223,30 @@ def _verify(args) -> int:
         print(f"fdroidkit verify: {e}", file=sys.stderr)
         return 3
     print("\n".join(rep.lines()))
+    return 0 if rep.ok else 1
+
+
+def _doctor(args) -> int:
+    import urllib.error
+    from pathlib import Path
+
+    from .doctor import DoctorError, doctor
+    from .publish import read_config
+    from .site.keys import KeyReadError
+    from .site.render import SiteError
+
+    repo = Path(args.doctor_repo) if args.doctor_repo else None
+    url = args.url or (read_config(repo).get("repo_url") if repo else None)
+    if not url:
+        print("fdroidkit doctor: give --url, or --repo with repo_url in its config.yml", file=sys.stderr)
+        return 3
+    try:
+        rep = doctor(url, repo=repo, site=args.site_url, scan_apks=not args.no_apk,
+                     all_versions=args.all_versions)
+    except (DoctorError, KeyReadError, SiteError, urllib.error.URLError, OSError) as e:
+        print(f"fdroidkit doctor: {e}", file=sys.stderr)
+        return 3
+    print(rep.to_json() if args.json else "\n".join(rep.lines()))
     return 0 if rep.ok else 1
 
 
