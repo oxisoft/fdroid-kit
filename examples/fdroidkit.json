@@ -4,6 +4,7 @@
     "description": "Android apps by Example, installable without a Google account.",
     "site_url": "https://fdroid.example.com",
     "accent": "#2F6FEB",
+    "obtainium": "direct",
     "org_name": "Example",
     "org_url": "https://example.com",
     "footer_links": [

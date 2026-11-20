@@ -17,6 +17,7 @@ import json
 import re
 import shutil
 import string
+import urllib.parse
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -46,6 +47,9 @@ class Brand:
     footer_links: list = field(default_factory=list)  # [{"label": ..., "url": ...}]
     badges: dict = field(default_factory=dict)  # appId -> {"category": str, "tags": [str]}
     template: str = ""  # custom index.html template, relative to the repo
+    # "Add to Obtainium" per app: "direct" (obtainium:// link, no third party), "redirect"
+    # (Obtainium's own redirect page, falls back to a "get Obtainium" prompt) or false (off).
+    obtainium: str | bool = "direct"
 
 
 def load_brand(repo: Path) -> Brand:
@@ -59,6 +63,10 @@ def load_brand(repo: Path) -> Brand:
     b = Brand(**{k: v for k, v in raw.items() if k in Brand.__dataclass_fields__})
     if not HEX.match(b.accent):
         raise SiteError(f"{p}: site.accent must be a hex colour like #2F6FEB, got {b.accent!r}")
+    if b.obtainium is True:
+        b.obtainium = "direct"
+    if b.obtainium not in (False, "direct", "redirect"):
+        raise SiteError(f'{p}: site.obtainium must be "direct", "redirect" or false, got {b.obtainium!r}')
     return b
 
 
@@ -122,11 +130,31 @@ def qr_svg(payload: str) -> str | None:
     return img.to_string(encoding="unicode")
 
 
+OBTAINIUM_REDIRECT = "https://apps.obtainium.imranr.dev/redirect?r="
+
+
+def obtainium_link(address: str, app_id: str, name: str, author: str, mode: str) -> str:
+    """Obtainium deep link that imports one app with the F-Droid third-party repo source.
+
+    A bare obtainium://add/<repo url> is not enough: that source has neverAutoSelect, so
+    Obtainium would not pick it for an unknown host and would not know which app of the
+    repo is meant. obtainium://app/<config> sets both (wiki.obtainium.imranr.dev/deep_links/;
+    source id = the Dart class name FDroidRepo, app picked by appIdOrName / ?appId=).
+    """
+    config = {"id": app_id, "url": f"{address}?appId={app_id}", "author": author, "name": name,
+              "overrideSource": "FDroidRepo",
+              "additionalSettings": json.dumps({"appIdOrName": app_id}, separators=(",", ":"))}
+    link = "obtainium://app/" + urllib.parse.quote(
+        json.dumps(config, separators=(",", ":"), ensure_ascii=False), safe="")
+    return OBTAINIUM_REDIRECT + urllib.parse.quote(link, safe="") if mode == "redirect" else link
+
+
 def group_fp(fp: str) -> str:
     return " ".join(fp[i:i + 4] for i in range(0, len(fp), 4))
 
 
-def _apps(repo: Path, data: dict, brand: Brand, out: Path) -> list[dict]:
+def _apps(repo: Path, data: dict, brand: Brand, out: Path, address: str = "",
+          author: str = "") -> list[dict]:
     icon_dir = out / "appicons"
     icon_dir.mkdir(parents=True, exist_ok=True)
     apps = []
@@ -148,9 +176,10 @@ def _apps(repo: Path, data: dict, brand: Brand, out: Path) -> list[dict]:
         fd_cat = (md.get("categories") or [""])[0]
         b = brand.badges.get(app_id, {})
         phone = pick(md.get("screenshots", {}).get("phone")) or []
+        name = pick(md.get("name")) or app_id
         apps.append({
             "id": app_id,
-            "name": pick(md.get("name")) or app_id,
+            "name": name,
             "summary": pick(md.get("summary")) or "",
             # Descriptions are hard-wrapped in metadata: unwrap, keep blank-line paragraphs.
             "description": [" ".join(p.split()) for p in re.split(r"\n\s*\n", raw_desc) if p.strip()],
@@ -163,6 +192,8 @@ def _apps(repo: Path, data: dict, brand: Brand, out: Path) -> list[dict]:
             "catLabel": b.get("category") or fd_cat,
             "tags": [t for t in b.get("tags", []) if t],
             "category": SCHEMA_CATEGORY.get(fd_cat, ""),
+            "obtainium": (obtainium_link(address, app_id, name, author, brand.obtainium)
+                          if brand.obtainium and address and latest else ""),
         })
     return apps
 
@@ -181,6 +212,10 @@ def _app_rows(apps: list[dict]) -> str:
                       + "".join(f'<span class="badge">{e(t)}</span>' for t in a["tags"]) + "</div>")
         dl = (f'<a class="applink" href="{e(a["apk"])}" aria-label="Download APK for {e(a["name"])}">'
               "Download APK</a>") if a["apk"] else ""
+        if a.get("obtainium"):
+            dl = ('<div class="appactions">' + dl
+                  + f'<a class="applink alt" href="{e(a["obtainium"])}" '
+                  f'aria-label="Add {e(a["name"])} to Obtainium">Add to Obtainium</a></div>')
         desc = "".join(f"<p>{e(p)}</p>" for p in a["description"])
         more = f"<details><summary>More</summary>{desc}</details>" if desc else ""
         rows.append(f'''      <div class="app" id="{e(a["id"])}">
@@ -289,8 +324,14 @@ def render(repo: Path, out: Path, runner: Callable | None = None, log: Callable 
     title = brand.title or pick(meta.get("name")) or "F-Droid repository"
     description = brand.description or " ".join((pick(meta.get("description")) or "").split())
     out.mkdir(parents=True, exist_ok=True)
-    apps = _apps(repo, data, brand, out)
+    author = brand.org_name or title
+    apps = _apps(repo, data, brand, out, address, author)
     e = html.escape
+    obtainium_note = ""
+    if any(a["obtainium"] for a in apps):
+        obtainium_note = ('<p class="alt-client">No F-Droid client? <a href="https://obtainium.imranr.dev/">'
+                          'Obtainium</a> can track each app straight from this repository: tap '
+                          '<em>Add to Obtainium</em> next to an app below.</p>')
 
     add_url = f"{address}?fingerprint={fp}"
     svg = qr_svg(add_url)
@@ -321,7 +362,7 @@ def render(repo: Path, out: Path, runner: Callable | None = None, log: Callable 
         logo=logo_html, address=e(address), add_url=e(add_url), qr=qr_html,
         fingerprint=fp, fingerprint_grouped=group_fp(fp),
         app_heading=f"{count} app{'s' if count != 1 else ''} in the repository",
-        apps=_app_rows(apps), org=org, footer_links=links, updated=updated, jsonld=ld)
+        apps=_app_rows(apps), obtainium_note=obtainium_note, org=org, footer_links=links, updated=updated, jsonld=ld)
     (out / "index.html").write_text(page)
     css = string.Template(_template(repo, brand, "site.css")).safe_substitute(accent=brand.accent)
     (out / "site.css").write_text(css)

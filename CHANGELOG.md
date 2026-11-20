@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-11-20)
 
+- **Add to Obtainium** on the landing page: every app gets a link that imports it into
+  [Obtainium](https://obtainium.imranr.dev/) with the F-Droid third-party repo source and the
+  app id preset (`obtainium://app/<config>`, per the Obtainium deep link docs), plus a one-line
+  note under the add-repo QR. `site.obtainium` in fdroidkit.json: `"direct"` (default, no third
+  party), `"redirect"` (Obtainium's redirect page, which offers to install Obtainium) or `false`.
 - **`fdroidkit doctor`**: one command that audits a live repo: TLS expiry, entry.jar signature,
   index-v2.json vs the signed entry.json, index-v1.jar signer, index age, landing page
   fingerprints, add-repo link and QR, signer pins (with `--repo`), Play automatic protection in

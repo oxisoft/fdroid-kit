@@ -7,7 +7,7 @@ adds it to your F-Droid repo, deploys it and reads it back from the live index. 
 install from F-Droid and update from Play, or the other way round, because both channels ship the
 same Google-signed APK.
 
-> Status: **v0.1.0**, first release. Five commands and two CI actions, tested on real Play-signed
+> Status: **v0.1.1**. Six commands (with `doctor`) and two CI actions, tested on real Play-signed
 > APKs. See the [CHANGELOG](CHANGELOG.md).
 
 ## Quickstart
@@ -16,7 +16,7 @@ On your own server (Gitea / Forgejo runner, nginx serving the repo). Needs Pytho
 (`keytool`), the Android build-tools and [fdroidserver](https://f-droid.org/docs/Installing_the_Server_and_Repo_Tools/).
 
 ```
-pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.0"
+pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.1"
 export FDROID_KEYSTORE_PASS="$(head -c 32 /dev/urandom | base64)"   # store it in your password manager
 fdroidkit --repo fdroid init --name "Example Apps" --url https://fdroid.example.com/fdroid/repo
 fdroidkit --repo fdroid add-app com.example.app --discover-signer universal.apk
@@ -140,6 +140,12 @@ accent, org_name, org_url, footer_links, per-app badges, a custom `template`): s
 [examples/fdroidkit.json](examples/fdroidkit.json). The QR needs `pip install 'fdroidkit[site]'`
 (qrcode; Pillow also downscales the icons).
 
+Each app also gets an **Add to Obtainium** link, for people who use
+[Obtainium](https://obtainium.imranr.dev/) instead of an F-Droid client. It imports the app with
+Obtainium's F-Droid third-party repo source, so updates come from your signed index. Set
+`"obtainium": "redirect"` to send visitors without Obtainium to its install prompt (Obtainium's own
+redirect page, a third party), or `false` to hide the link.
+
 ### doctor
 
 ```
@@ -159,7 +165,7 @@ whether the live versionCode lags the local metadata or index. Exit 0 healthy (w
 Gitea / Forgejo:
 
 ```yaml
-- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.0
+- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.1
   env: { PLAY_SA_JSON: "${{ secrets.PLAY_SA_JSON }}" }
   with: { package: com.example.app, version-code: "42", version-name: "1.4.0", repo-path: /srv/fdroid }
 ```
@@ -173,7 +179,7 @@ throwaway venv, so the runner needs only Python 3.10+, the Android build-tools a
 GitHub Actions + GitHub Pages (no server at all):
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.0
+- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.1
   env:
     FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
     FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}

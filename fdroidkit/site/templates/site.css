@@ -47,9 +47,13 @@ summary { cursor: pointer; color: var(--accent); }
   flex: none; align-self: center; text-decoration: none; font-weight: 600;
   border: 1px solid var(--accent); border-radius: 8px; padding: 6px 12px;
 }
+.appactions { flex: none; align-self: center; display: flex; flex-direction: column; gap: 8px; }
+.appactions .applink { align-self: stretch; text-align: center; }
+.applink.alt { border-color: var(--line); font-weight: 500; font-size: 0.9rem; }
+.alt-client { margin: 12px 0 0; color: var(--muted); font-size: 0.9rem; }
 footer { margin-top: 40px; color: var(--muted); font-size: 0.9rem; }
 .small { font-size: 0.8rem; }
 @media (max-width: 560px) {
   .app { flex-wrap: wrap; }
-  .applink { align-self: flex-start; }
+  .applink, .appactions { align-self: flex-start; }
 }

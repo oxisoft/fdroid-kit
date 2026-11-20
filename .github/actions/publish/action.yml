@@ -4,7 +4,7 @@ description: Publish an APK to an F-Droid repo kept in git and hosted on GitHub 
 # (config.yml, metadata/, repo/) lives in the calling repository; the index key comes
 # from secrets, lives only under $RUNNER_TEMP while the job runs and is wiped afterwards.
 #
-#   - uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.0
+#   - uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.1
 #     env:
 #       FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
 #       FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}

@@ -228,3 +228,51 @@ def test_qr_check_ignores_svg_serialisation():
     b = '<svg><rect x="0"/><path d="M2,2H3V3H2z"/></svg>'
     assert v._qr_modules(a) == v._qr_modules(b) == ["M2,2H3V3H2z"]
     assert v._qr_modules(a) != v._qr_modules('<svg><path d="M2,2H4V3H2z"/></svg>')
+
+
+def _obtainium_config(href):
+    import urllib.parse
+    assert href.startswith("obtainium://app/")
+    return json.loads(urllib.parse.unquote(href[len("obtainium://app/"):]))
+
+
+def test_obtainium_link_per_app(tmp_path):
+    import html as h
+    repo = make_repo(tmp_path, brand={"org_name": "Acme"})
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    page = (repo / "site" / "index.html").read_text()
+    links = [h.unescape(x) for x in re.findall(r'class="applink alt" href="([^"]+)"', page)]
+    assert len(links) == 2
+    cfg = _obtainium_config(links[0])  # Alpha sorts first
+    assert cfg["id"] == "com.example.alpha" and cfg["name"] == "Alpha" and cfg["author"] == "Acme"
+    assert cfg["url"] == "https://fdroid.example.com/fdroid/repo?appId=com.example.alpha"
+    assert cfg["overrideSource"] == "FDroidRepo"
+    assert json.loads(cfg["additionalSettings"]) == {"appIdOrName": "com.example.alpha"}
+    # the JSON is fully encoded: no raw ?, / or quotes that would split the deep link
+    assert re.fullmatch(r"obtainium://app/[A-Za-z0-9%._~-]+", links[0])
+    assert 'class="alt-client"' in page and "Add to Obtainium" in page
+    assert " style=" not in page and "onclick" not in page
+
+
+def test_obtainium_redirect_and_opt_out(tmp_path):
+    import html as h
+    import urllib.parse
+    repo = make_repo(tmp_path, brand={"obtainium": "redirect"})
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    page = (repo / "site" / "index.html").read_text()
+    href = h.unescape(re.search(r'class="applink alt" href="([^"]+)"', page).group(1))
+    assert href.startswith(rnd.OBTAINIUM_REDIRECT)
+    inner = urllib.parse.unquote(href[len(rnd.OBTAINIUM_REDIRECT):])
+    assert _obtainium_config(inner)["id"] == "com.example.alpha"
+
+    repo2 = make_repo(tmp_path / "off", brand={"obtainium": False})
+    rnd.render(repo2, Path("site"), runner=fake_runner())
+    page2 = (repo2 / "site" / "index.html").read_text()
+    assert "Obtainium" not in page2 and "$obtainium_note" not in page2
+    assert vfy.verify(repo2, Path("site"), runner=fake_runner()).ok
+
+
+def test_bad_obtainium_value_is_refused(tmp_path):
+    repo = make_repo(tmp_path, brand={"obtainium": "yes please"})
+    with pytest.raises(rnd.SiteError, match="site.obtainium"):
+        rnd.render(repo, Path("site"), runner=fake_runner())
