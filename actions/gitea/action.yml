@@ -17,6 +17,8 @@ description: Publish the Play-signed universal APK of a release to your own F-Dr
 # the expanded step script):
 #   PLAY_SA_JSON   service-account JSON (source play); written to a 0600 temp file
 #                  and deleted afterwards. PLAY_SA_FILE (a path) works as well.
+#   GITHUB_TOKEN   optional, source github-release: lifts the anonymous API rate limit
+#                  and reads private repos; public repos need none.
 #   index key passphrases: whatever names config.yml reads with `{env: NAME}`
 #                  (`fdroidkit init` writes FDROID_KEYSTORE_PASS / FDROID_KEY_PASS).
 inputs:
@@ -24,19 +26,28 @@ inputs:
     description: Application id
     required: true
   version-code:
-    description: versionCode of the release
-    required: true
+    description: versionCode of the release (optional for source github-release, read from the APK)
+    default: ""
   version-name:
-    description: versionName of the release
-    required: true
+    description: versionName of the release (optional for source github-release)
+    default: ""
   repo-path:
     description: Path of the F-Droid repo working tree on the runner
     required: true
   source:
-    description: play | file
+    description: play | file | github-release
     default: play
   apk:
     description: APK path for source file
+    default: ""
+  github-repo:
+    description: OWNER/NAME for source github-release (default apps.<package>.source.repo in fdroidkit.json)
+    default: ""
+  asset:
+    description: Release asset glob for source github-release (default fdroidkit.json, else *.apk)
+    default: ""
+  tag:
+    description: Release tag for source github-release (default the latest non-prerelease release)
     default: ""
   live-url:
     description: Public repo URL for the read-back (default repo_url in config.yml)
@@ -88,6 +99,9 @@ runs:
         IN_REPO: ${{ inputs.repo-path }}
         IN_SOURCE: ${{ inputs.source }}
         IN_APK: ${{ inputs.apk }}
+        IN_GH_REPO: ${{ inputs.github-repo }}
+        IN_ASSET: ${{ inputs.asset }}
+        IN_TAG: ${{ inputs.tag }}
         IN_LIVE_URL: ${{ inputs.live-url }}
         IN_AFTER_UPDATE: ${{ inputs.after-update }}
         IN_RSYNC_SITE: ${{ inputs.rsync-site }}
@@ -99,6 +113,9 @@ runs:
         set -euo pipefail
         args=(--source "$IN_SOURCE")
         if [ -n "$IN_APK" ]; then args+=(--apk "$IN_APK"); fi
+        if [ -n "$IN_GH_REPO" ]; then args+=(--github-repo "$IN_GH_REPO"); fi
+        if [ -n "$IN_ASSET" ]; then args+=(--asset "$IN_ASSET"); fi
+        if [ -n "$IN_TAG" ]; then args+=(--tag "$IN_TAG"); fi
         if [ -n "$IN_LIVE_URL" ]; then args+=(--live-url "$IN_LIVE_URL"); fi
         if [ -n "$IN_RSYNC_SITE" ]; then args+=(--rsync-site "$IN_RSYNC_SITE"); fi
         if [ -n "$IN_BUILD_TOOLS" ]; then args+=(--build-tools "$IN_BUILD_TOOLS"); fi
@@ -122,8 +139,10 @@ runs:
         # after-update commands may call `fdroidkit site`: the venv goes first on PATH.
         export PATH="$FDROIDKIT_VENV/bin:$PATH"
         # fdroidkit publishes under umask 022 itself (served files must be world-readable).
-        fdroidkit --repo "$IN_REPO" publish \
-          "$IN_PACKAGE" "$IN_CODE" "$IN_NAME" "${args[@]}"
+        version=()
+        if [ -n "$IN_CODE" ]; then version+=("$IN_CODE"); fi
+        if [ -n "$IN_NAME" ]; then version+=("$IN_NAME"); fi
+        fdroidkit --repo "$IN_REPO" publish "$IN_PACKAGE" "${version[@]}" "${args[@]}"
 
     - name: Remove the venv
       if: always()

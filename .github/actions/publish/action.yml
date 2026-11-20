@@ -21,6 +21,9 @@ description: Publish an APK to an F-Droid repo kept in git and hosted on GitHub 
 #   keypass: {env: FDROID_KEYSTORE_PASS}
 # Secrets only arrive as environment variables, never as inputs (inputs end up in the
 # expanded step script). PLAY_SA_JSON (source play) is handled like the key.
+# Source github-release: pass GITHUB_TOKEN: ${{ github.token }} as env to lift the
+# anonymous API rate limit (public repos work without it); version-code/-name are read
+# from the APK when left empty.
 #
 # With pages: "true" (default) the action renders the landing page and uploads
 # <site>/ + fdroid/repo/ as the Pages artifact; deploy it from a job with
@@ -32,19 +35,28 @@ inputs:
     description: Application id
     required: true
   version-code:
-    description: versionCode of the release
-    required: true
+    description: versionCode of the release (optional for source github-release, read from the APK)
+    default: ""
   version-name:
-    description: versionName of the release
-    required: true
+    description: versionName of the release (optional for source github-release)
+    default: ""
   repo-path:
     description: Path of the F-Droid repo working tree, relative to the workspace
     default: fdroid
   source:
-    description: play | file
+    description: play | file | github-release
     default: file
   apk:
     description: APK path for source file
+    default: ""
+  github-repo:
+    description: OWNER/NAME for source github-release (default apps.<package>.source.repo in fdroidkit.json)
+    default: ""
+  asset:
+    description: Release asset glob for source github-release (default fdroidkit.json, else *.apk)
+    default: ""
+  tag:
+    description: Release tag for source github-release (default the latest non-prerelease release)
     default: ""
   live-url:
     description: Public repo URL for the read-back (default repo_url in config.yml)
@@ -165,6 +177,9 @@ runs:
         IN_REPO: ${{ inputs.repo-path }}
         IN_SOURCE: ${{ inputs.source }}
         IN_APK: ${{ inputs.apk }}
+        IN_GH_REPO: ${{ inputs.github-repo }}
+        IN_ASSET: ${{ inputs.asset }}
+        IN_TAG: ${{ inputs.tag }}
         IN_LIVE_URL: ${{ inputs.live-url }}
         IN_READBACK: ${{ inputs.readback }}
         IN_DRY_RUN: ${{ inputs.dry-run }}
@@ -175,6 +190,9 @@ runs:
         unset FDROID_KEYSTORE_B64
         args=(--source "$IN_SOURCE" --no-deploy)
         if [ -n "$IN_APK" ]; then args+=(--apk "$(realpath "$IN_APK")"); fi
+        if [ -n "$IN_GH_REPO" ]; then args+=(--github-repo "$IN_GH_REPO"); fi
+        if [ -n "$IN_ASSET" ]; then args+=(--asset "$IN_ASSET"); fi
+        if [ -n "$IN_TAG" ]; then args+=(--tag "$IN_TAG"); fi
         if [ -n "$IN_LIVE_URL" ]; then args+=(--live-url "$IN_LIVE_URL"); fi
         if [ -n "$IN_BUILD_TOOLS" ]; then args+=(--build-tools "$IN_BUILD_TOOLS"); fi
         if [ -n "$IN_FDROID" ]; then
@@ -196,7 +214,10 @@ runs:
         unset PLAY_SA_JSON
 
         export PATH="$FDROIDKIT_VENV/bin:$PATH"
-        fdroidkit --repo "$IN_REPO" publish "$IN_PACKAGE" "$IN_CODE" "$IN_NAME" "${args[@]}"
+        version=()
+        if [ -n "$IN_CODE" ]; then version+=("$IN_CODE"); fi
+        if [ -n "$IN_NAME" ]; then version+=("$IN_NAME"); fi
+        fdroidkit --repo "$IN_REPO" publish "$IN_PACKAGE" "${version[@]}" "${args[@]}"
 
     - name: Landing page + Pages tree
       if: inputs.pages == 'true' && inputs.dry-run != 'true'

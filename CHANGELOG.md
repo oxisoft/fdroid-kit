@@ -10,6 +10,8 @@
   self-signed signer from the release APK and saves the source in `fdroidkit.json`
   (`apps.<package>.source`), so later publishes need only the package. Optional token via
   `{"env": NAME}` (default `$GITHUB_TOKEN`), never required for public repos.
+- Both actions take `source: github-release` with `github-repo`, `asset` and `tag` inputs;
+  `version-code` and `version-name` are optional for that source.
 
 ## 0.1.1 (2026-11-20)
 
