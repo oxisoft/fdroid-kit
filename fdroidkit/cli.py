@@ -42,6 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("package", help="application id, e.g. com.example.app")
     s.add_argument("--discover-signer", metavar="APK",
                    help="read the signer digest from this APK and pin it (Play signer expected)")
+    s.add_argument("--from-github", metavar="OWNER/NAME",
+                   help="take the APK from this repo's latest GitHub release, pin its self-signed signer "
+                        "and save the source in fdroidkit.json (implies --not-play)")
+    s.add_argument("--asset", default=None, metavar="GLOB", help="release asset glob for --from-github (default *.apk)")
+    s.add_argument("--tag", default=None, help="release tag for --from-github (default: latest release)")
     s.add_argument("--pin", action="append", default=[], metavar="SHA256",
                    help="pin a signer certificate SHA-256 digest (repeatable, for rotated keys)")
     s.add_argument("--not-play", action="store_true",
@@ -54,9 +59,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("publish", help="check an APK, add it, update the index, deploy, read back")
     s.add_argument("package")
-    s.add_argument("version_code", type=int)
-    s.add_argument("version_name")
+    s.add_argument("version_code", type=int, nargs="?",
+                   help="versionCode to publish (optional for github-release: read from the APK)")
+    s.add_argument("version_name", nargs="?", help="versionName (optional for github-release)")
     s.add_argument("--source", choices=["play", "file", "github-release"], default="play")
+    s.add_argument("--github-repo", metavar="OWNER/NAME",
+                   help="GitHub repo for --source github-release (default: apps.<package>.source.repo in "
+                        "fdroidkit.json). Not --repo: that is the F-Droid working tree")
+    s.add_argument("--asset", metavar="GLOB", help="release asset glob (default: fdroidkit.json, else *.apk)")
+    s.add_argument("--tag", help="release tag (default: the latest non-prerelease release)")
     s.add_argument("--apk", help="APK path for --source file")
     s.add_argument("--dry-run", action="store_true", help="run every check, publish nothing")
     s.add_argument("--play-sa-file", help="Play service-account JSON (default: $PLAY_SA_FILE)")
@@ -149,13 +160,14 @@ def _add_app(args) -> int:
         pins=args.pin, not_play=args.not_play, name=args.name, license=args.license,
         website=args.website, source_code=args.source_code,
         build_tools=Path(args.build_tools) if args.build_tools else None,
+        from_github=args.from_github, asset=args.asset, tag=args.tag,
     )
     try:
         add_app(o)
     except CheckFailed as e:
         print(f"fdroidkit add-app: refused: {e}", file=sys.stderr)
         return 1
-    except (AddAppError, PublishError, OSError) as e:
+    except (AddAppError, PublishError, RuntimeError, OSError) as e:
         print(f"fdroidkit add-app: {e}", file=sys.stderr)
         return 3
     return 0
@@ -174,6 +186,7 @@ def _publish(args) -> int:
         fdroid=args.fdroid, build_tools=Path(args.build_tools) if args.build_tools else None,
         live_url=args.live_url, after_update=args.after_update, rsync_site=args.rsync_site,
         readback=not args.no_readback, deploy=not args.no_deploy, play_sa_file=args.play_sa_file,
+        github_repo=args.github_repo, asset=args.asset, tag=args.tag,
     )
     try:
         return publish(opts)

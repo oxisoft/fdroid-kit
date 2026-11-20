@@ -4,7 +4,8 @@ Port of the publish script that has shipped OxiSoft's apps to fdroid.oxisoft.io 
 2026-11, with every path made a parameter. Each step is a hard stop on failure:
 
   1. versionCode must be higher than the one already published (cheap, before download)
-  2. fetch the APK (Play: the Google-signed universal APK; file: a path on disk)
+  2. fetch the APK (Play: the Google-signed universal APK; file: a path on disk;
+     github-release: the release asset, self-signed by the developer)
   3. identity: package, versionCode, versionName (aapt2 dump badging)
   4. every signer pinned in AllowedAPKSigningKeys (apksigner; rotation aware,
      Source Stamp ignored)
@@ -40,8 +41,8 @@ class PublishError(Exception):
 class Options:
     repo: Path
     package: str
-    version_code: int
-    version_name: str
+    version_code: int | None
+    version_name: str | None
     source: str = "play"
     apk: Path | None = None
     dry_run: bool = False
@@ -55,6 +56,9 @@ class Options:
     play_sa_file: str | None = None
     readback_attempts: int = 6
     readback_delay: float = 5.0
+    github_repo: str | None = None
+    asset: str | None = None
+    tag: str | None = None
 
 
 def log(msg: str) -> None:
@@ -169,7 +173,29 @@ def fetch(opts: Options, dest: Path) -> Path:
         if not sa:
             raise PublishError("--source play needs --play-sa-file or $PLAY_SA_FILE (service-account JSON)")
         return play.download(opts.package, opts.version_code, sa, dest)
+    if opts.source == "github-release":
+        from .sources import github
+        cfg = github.source_config(opts.repo.resolve(), opts.package)
+        gh_repo = opts.github_repo or cfg.get("repo")
+        if not gh_repo:
+            raise PublishError("--source github-release needs --github-repo owner/name or "
+                               f"apps.{opts.package}.source.repo in fdroidkit.json")
+        github.fetch(gh_repo, dest, pattern=opts.asset or cfg.get("asset") or "*.apk",
+                     tag=opts.tag or cfg.get("tag"), token=github.token_from(cfg), log=log)
+        return dest
     raise PublishError(f"source {opts.source!r} is not implemented yet")
+
+
+_BADGE_CODE = re.compile(r"versionCode='(\d+)'")
+_BADGE_NAME = re.compile(r"versionName='([^']*)'")
+
+
+def version_from_badging(first_line: str) -> tuple[int, str]:
+    """(versionCode, versionName) of an APK, for sources that pick the version themselves."""
+    c, n = _BADGE_CODE.search(first_line), _BADGE_NAME.search(first_line)
+    if not c or not n:
+        raise CheckFailed(f"identity: no versionCode/versionName in: {first_line}")
+    return int(c.group(1)), n.group(1)
 
 
 def check_apk(apk: Path, opts: Options, bt: Path, pins: list[str], runner: Callable = run) -> None:
@@ -177,6 +203,11 @@ def check_apk(apk: Path, opts: Options, bt: Path, pins: list[str], runner: Calla
     if not badging:
         raise CheckFailed("identity: aapt2 printed nothing")
     log(badging[0])
+    if opts.version_code is None or opts.version_name is None:
+        code, name = version_from_badging(badging[0])
+        opts.version_code = code if opts.version_code is None else opts.version_code
+        opts.version_name = name if opts.version_name is None else opts.version_name
+        log(f"version from the APK: {opts.version_name} ({opts.version_code})")
     checks.check_identity(badging[0], opts.package, opts.version_code, opts.version_name)
     signers = checks.parse_signers(runner([bt / "apksigner", "verify", "--print-certs", apk]))
     checks.check_signers(signers, pins)
@@ -225,7 +256,11 @@ def publish(opts: Options, runner: Callable = run, sleep: Callable = time.sleep)
     pins = checks.parse_pins(meta)
     if not pins:
         raise CheckFailed(f"signer: no AllowedAPKSigningKeys pinned in {meta_file}")
-    checks.check_version_code(opts.version_code, published_code(meta, repo, opts.package))
+    published = published_code(meta, repo, opts.package)
+    if (opts.version_code is None or opts.version_name is None) and opts.source != "github-release":
+        raise PublishError(f"--source {opts.source} needs version_code and version_name")
+    if opts.version_code is not None:
+        checks.check_version_code(opts.version_code, published)
     bt = find_build_tools(opts.build_tools, repo)
     live_url = opts.live_url or read_config(repo).get("repo_url") or ""
     fdroid = ""
@@ -238,9 +273,14 @@ def publish(opts: Options, runner: Callable = run, sleep: Callable = time.sleep)
             raise PublishError("no live URL: set repo_url in config.yml, pass --live-url, or --no-readback")
 
     with tempfile.TemporaryDirectory(prefix="fdroidkit-") as td:
-        apk = fetch(opts, Path(td) / f"{opts.package}_{opts.version_code}.apk")
+        apk = fetch(opts, Path(td) / f"{opts.package}_{opts.version_code or 'new'}.apk")
         log(f"apk {apk.stat().st_size} bytes from {opts.source}")
         check_apk(apk, opts, bt, pins, runner)
+        # Release sources pick the version: check it now (no downgrade, no duplicate).
+        checks.check_version_code(opts.version_code, published)
+        named = apk.with_name(f"{opts.package}_{opts.version_code}.apk")
+        if named != apk:
+            apk = apk.rename(named)
         if opts.dry_run:
             log("dry run: all checks passed, nothing published")
             return 0

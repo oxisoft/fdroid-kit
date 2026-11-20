@@ -66,6 +66,7 @@ It wraps [fdroidserver](https://gitlab.com/fdroid/fdroidserver), it does not rep
 fdroidkit init --name "Example Apps" --url https://fdroid.example.com/fdroid/repo
 fdroidkit add-app com.example.app --discover-signer app.apk
 fdroidkit publish com.example.app 42 1.4.0 --source play [--dry-run]
+fdroidkit publish com.example.app --source github-release --github-repo owner/name [--dry-run]
 fdroidkit site          # landing page with fingerprint and add-repo QR, from the signed index
 fdroidkit verify        # every fingerprint on the page matches the index key
 fdroidkit doctor --url https://fdroid.example.com/fdroid/repo   # audit the live repo
@@ -99,6 +100,23 @@ that it has no Play automatic protection. Take the universal APK from Play Conso
 explorer). `--not-play` skips the DN check if you sign APKs yourself. On an existing app it only
 adds missing pins and leaves every other field alone.
 
+```
+fdroidkit add-app io.oxisoft.oxitalk --from-github oxisoft/oxitalk --asset '*-android.apk'
+```
+
+`--from-github` is the same for apps you sign yourself and attach to GitHub Releases
+(IzzyOnDroid style): it downloads the APK of the latest release (or `--tag`), pins its signer
+without the Play DN check, and saves the source in `fdroidkit.json`:
+
+```json
+{"apps": {"io.oxisoft.oxitalk": {"source": {"type": "github-release", "repo": "oxisoft/oxitalk",
+                                            "asset": "*-android.apk"}}}}
+```
+
+Optional `"token": {"env": "NAME"}` names the variable holding a GitHub token (default
+`$GITHUB_TOKEN`, only sent when set): public repos need none, a token lifts the anonymous rate
+limit and reads private repos. A literal token in the file is refused.
+
 ### publish
 
 Every step is a hard stop:
@@ -106,6 +124,13 @@ versionCode higher than the published one, identity (aapt2), every signer pinned
 (apksigner, rotation aware, Source Stamp ignored), no `com.pairip` in any dex; then copy in,
 bump the metadata, `fdroid update`, `fdroid deploy`, and read the versionCode back from the
 live `index-v2.json`. `--dry-run` stops after the checks.
+
+`--source github-release` takes the release asset matching `--asset` (default `*.apk`, exactly
+one must match) from the latest non-prerelease release or `--tag`; repo and asset default to
+`fdroidkit.json`. The version comes from the APK itself, so versionCode and versionName are
+optional; the no-downgrade, no-duplicate check runs after the download. The pinned signer is
+what makes this safe: a release asset proves nothing about who built it. The repo flag is
+`--github-repo`, because `--repo` already names the F-Droid working tree.
 
 ```
 fdroidkit --repo /srv/fdroid publish com.example.app 42 1.4.0 --source play --play-sa-file sa.json
@@ -204,8 +229,8 @@ Full examples in [examples/](examples/).
 ## Roadmap
 
 - v0.1: `publish` (Play and file sources), `site` + `verify`, `init`, `add-app`, both actions.
-- Next: `doctor` (live repo audit, in main).
-- Later: GitHub Release source with self-signed pins, Obtainium link.
+- v0.1.1: `doctor` (live repo audit), Obtainium link.
+- Next: GitHub Release source with self-signed pins (in main).
 
 ## In production
 

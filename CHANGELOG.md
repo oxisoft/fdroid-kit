@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **GitHub Release source** for apps you sign yourself (IzzyOnDroid style):
+  `fdroidkit publish <package> --source github-release --github-repo owner/name [--asset GLOB]
+  [--tag TAG]` downloads the release APK (latest non-prerelease by default), reads versionCode and
+  versionName from it, refuses a downgrade or duplicate, checks identity, the pinned signer and
+  pairip, then publishes like the other sources. `add-app --from-github owner/name` pins the
+  self-signed signer from the release APK and saves the source in `fdroidkit.json`
+  (`apps.<package>.source`), so later publishes need only the package. Optional token via
+  `{"env": NAME}` (default `$GITHUB_TOKEN`), never required for public repos.
+
 ## 0.1.1 (2026-11-20)
 
 - **Add to Obtainium** on the landing page: every app gets a link that imports it into

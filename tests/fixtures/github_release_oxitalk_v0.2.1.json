@@ -1,0 +1,61 @@
+{
+  "url": "https://api.github.com/repos/oxisoft/oxitalk/releases/443642220",
+  "html_url": "https://github.com/oxisoft/oxitalk/releases/tag/v0.2.1",
+  "id": 443642220,
+  "tag_name": "v0.2.1",
+  "name": "OxiTalk 0.2.1",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-11-12T22:22:47Z",
+  "published_at": "2026-11-12T23:46:07Z",
+  "assets": [
+    {
+      "url": "https://api.github.com/repos/oxisoft/oxitalk/releases/assets/741530651",
+      "id": 741530651,
+      "name": "oxitalk-0.2.1-android.apk",
+      "content_type": "application/vnd.android.package-archive",
+      "size": 211489427,
+      "browser_download_url": "https://github.com/oxisoft/oxitalk/releases/download/v0.2.1/oxitalk-0.2.1-android.apk"
+    },
+    {
+      "url": "https://api.github.com/repos/oxisoft/oxitalk/releases/assets/741530656",
+      "id": 741530656,
+      "name": "oxitalk-0.2.1-linux-x86_64.tar.gz",
+      "content_type": "application/x-gtar",
+      "size": 41602084,
+      "browser_download_url": "https://github.com/oxisoft/oxitalk/releases/download/v0.2.1/oxitalk-0.2.1-linux-x86_64.tar.gz"
+    },
+    {
+      "url": "https://api.github.com/repos/oxisoft/oxitalk/releases/assets/741530653",
+      "id": 741530653,
+      "name": "oxitalk-0.2.1-windows-x64.zip",
+      "content_type": "application/zip",
+      "size": 45314671,
+      "browser_download_url": "https://github.com/oxisoft/oxitalk/releases/download/v0.2.1/oxitalk-0.2.1-windows-x64.zip"
+    },
+    {
+      "url": "https://api.github.com/repos/oxisoft/oxitalk/releases/assets/741530647",
+      "id": 741530647,
+      "name": "oxitalk-0.2.1-x86_64.AppImage",
+      "content_type": "application/vnd.appimage",
+      "size": 38730232,
+      "browser_download_url": "https://github.com/oxisoft/oxitalk/releases/download/v0.2.1/oxitalk-0.2.1-x86_64.AppImage"
+    },
+    {
+      "url": "https://api.github.com/repos/oxisoft/oxitalk/releases/assets/741530710",
+      "id": 741530710,
+      "name": "oxitalk-0.2.1-x86_64.flatpak",
+      "content_type": "application/vnd.flatpak",
+      "size": 29639728,
+      "browser_download_url": "https://github.com/oxisoft/oxitalk/releases/download/v0.2.1/oxitalk-0.2.1-x86_64.flatpak"
+    },
+    {
+      "url": "https://api.github.com/repos/oxisoft/oxitalk/releases/assets/741530654",
+      "id": 741530654,
+      "name": "SHA256SUMS",
+      "content_type": "application/octet-stream",
+      "size": 479,
+      "browser_download_url": "https://github.com/oxisoft/oxitalk/releases/download/v0.2.1/SHA256SUMS"
+    }
+  ]
+}

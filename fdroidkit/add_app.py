@@ -49,6 +49,9 @@ class AddAppOptions:
     website: str = ""
     source_code: str = ""
     build_tools: Path | None = None
+    from_github: str | None = None
+    asset: str | None = None
+    tag: str | None = None
 
 
 def parse_signer_certs(apksigner_output: str) -> list[tuple[str, str]]:
@@ -146,7 +149,26 @@ def add_app(o: AddAppOptions, runner: Callable | None = None, log=print) -> Path
     if bad:
         raise AddAppError(f"--pin needs a 64-hex SHA-256 digest, got {bad[0]!r}")
     note = "Pins given with --pin."
-    if o.discover_apk:
+    if o.from_github and o.discover_apk:
+        raise AddAppError("--from-github and --discover-signer both name an APK: pass one")
+    if o.from_github:
+        import tempfile
+
+        from .sources import github
+        src = {"type": "github-release", "repo": github.check_repo(o.from_github)}
+        if o.asset:
+            src["asset"] = o.asset
+        bt = find_build_tools(o.build_tools, repo)
+        with tempfile.TemporaryDirectory(prefix="fdroidkit-") as td:
+            apk = Path(td) / "release.apk"
+            a = github.fetch(src["repo"], apk, pattern=o.asset or "*.apk", tag=o.tag,
+                             token=github.token_from(None), log=log)
+            found = discover(apk, o.package, bt, runner, True)
+        pins += [p for p in found if p not in pins]
+        note = f"Self-signed APK signer, read from {a.name} ({src['repo']} {a.tag}) by --from-github."
+        log(f"signer{'s' if len(found) > 1 else ''} found: {', '.join(found)}")
+        log(f"{github.save_source_config(repo, o.package, src)}: apps.{o.package}.source = {src}")
+    elif o.discover_apk:
         apk = Path(o.discover_apk)
         if not apk.is_file():
             raise AddAppError(f"--discover-signer: no file {apk}")
@@ -179,5 +201,8 @@ def add_app(o: AddAppOptions, runner: Callable | None = None, log=print) -> Path
             f.write_text(body)
     log(f"wrote {meta_file} with {len(pins)} pinned signer(s)")
     log(f"listing: fill {listing}/short_description.txt, full_description.txt, add icon.png and phoneScreenshots/")
-    log(f"next: fdroidkit publish {o.package} <versionCode> <versionName> --dry-run")
+    if o.from_github:
+        log(f"next: fdroidkit publish {o.package} --source github-release --dry-run")
+    else:
+        log(f"next: fdroidkit publish {o.package} <versionCode> <versionName> --dry-run")
     return meta_file
