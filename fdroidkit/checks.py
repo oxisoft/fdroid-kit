@@ -18,9 +18,10 @@ class CheckFailed(Exception):
 _SIGNER_RE = re.compile(
     # build-tools <= 36: "Signer #1 ..." for one key, "Signer (minSdkVersion=..) ..." per
     # key after a Play signing-key rotation. build-tools 37: "V3.0 Signer: certificate ..."
-    # (scheme prefix, colon), "V3.1 Signer ..." for the rotated key. Source Stamp lines
-    # start differently and are ignored.
-    r"^(?:V\d+(?:\.\d+)? )?Signer(?: #\d+| \([^)\n]*\))?:? certificate SHA-256 digest: ([0-9a-f]{64})",
+    # (scheme prefix, colon); after a rotation "V3.1 Signer: (minSdkVersion=33, ...) certificate"
+    # and "V3.0 Signer: (minSdkVersion=24, ...) certificate", colon BEFORE the range (verbatim
+    # from Habit Observer 34, FK-18). Source Stamp lines start differently and are ignored.
+    r"^(?:V\d+(?:\.\d+)? )?Signer(?: #\d+| \([^)\n]*\))?(?:: \([^)\n]*\))?:? certificate SHA-256 digest: ([0-9a-f]{64})",
     re.M,
 )
 _PIN_RE = re.compile(r"^\s*-\s*([0-9a-f]{64})\s*$", re.M)

@@ -7,7 +7,7 @@ adds it to your F-Droid repo, deploys it and reads it back from the live index. 
 install from F-Droid and update from Play, or the other way round, because both channels ship the
 same Google-signed APK.
 
-> Status: **v0.1.2**. Six commands (with `doctor`) and two CI actions, tested on real Play-signed
+> Status: **v0.1.3**. Six commands (with `doctor`) and two CI actions, tested on real Play-signed
 > and self-signed (GitHub Release) APKs. See the [CHANGELOG](CHANGELOG.md).
 
 ## Quickstart
@@ -16,7 +16,7 @@ On your own server (Gitea / Forgejo runner, nginx serving the repo). Needs Pytho
 (`keytool`), the Android build-tools and [fdroidserver](https://f-droid.org/docs/Installing_the_Server_and_Repo_Tools/).
 
 ```
-pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.2"
+pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.3"
 export FDROID_KEYSTORE_PASS="$(head -c 32 /dev/urandom | base64)"   # store it in your password manager
 fdroidkit --repo fdroid init --name "Example Apps" --url https://fdroid.example.com/fdroid/repo
 fdroidkit --repo fdroid add-app com.example.app --discover-signer universal.apk
@@ -190,7 +190,7 @@ whether the live versionCode lags the local metadata or index. Exit 0 healthy (w
 Gitea / Forgejo:
 
 ```yaml
-- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.2
+- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.3
   env: { PLAY_SA_JSON: "${{ secrets.PLAY_SA_JSON }}" }
   with: { package: com.example.app, version-code: "42", version-name: "1.4.0", repo-path: /srv/fdroid }
 ```
@@ -204,7 +204,7 @@ throwaway venv, so the runner needs only Python 3.10+, the Android build-tools a
 GitHub Actions + GitHub Pages (no server at all):
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.2
+- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.3
   env:
     FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
     FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
@@ -231,6 +231,7 @@ Full examples in [examples/](examples/).
 - v0.1: `publish` (Play and file sources), `site` + `verify`, `init`, `add-app`, both actions.
 - v0.1.1: `doctor` (live repo audit), Obtainium link.
 - v0.1.2: GitHub Release source with self-signed pins (`--source github-release`, `add-app --from-github`).
+- v0.1.3: fix for rotated Play signing keys on build-tools 37.
 
 ## In production
 

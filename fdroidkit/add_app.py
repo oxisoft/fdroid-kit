@@ -23,8 +23,9 @@ _PKG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _SIGNER_LINE = re.compile(
     # Same shapes as checks._SIGNER_RE: "Signer #1 certificate ..." (build-tools <= 36) and
-    # "V3.0 Signer: certificate ..." (build-tools 37).
-    r"^((?:V\d+(?:\.\d+)? )?Signer(?: #\d+| \([^)\n]*\))?):? certificate (DN|SHA-256 digest): (.+)$", re.M)
+    # "V3.0 Signer: certificate ..." / "V3.1 Signer: (minSdkVersion=33, ...) certificate ..."
+    # (build-tools 37; the range stays in the label so DN and digest pair per signer).
+    r"^((?:V\d+(?:\.\d+)? )?Signer(?: #\d+| \([^)\n]*\))?(?:: \([^)\n]*\))?):? certificate (DN|SHA-256 digest): (.+)$", re.M)
 _BADGING_PKG = re.compile(r"name='([^']+)'")
 
 LISTING_FILES = {

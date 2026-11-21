@@ -1,3 +1,3 @@
 """fdroidkit: run your own F-Droid repository from CI."""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"

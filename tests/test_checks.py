@@ -132,3 +132,25 @@ def test_parse_signers_build_tools_37():
 def test_parse_signers_build_tools_37_rotated_and_dedup():
     out = APKSIGNER_37 + f"V3.1 Signer (minSdkVersion=33): certificate SHA-256 digest: {B}\nV2 Signer #1: certificate SHA-256 digest: {A}\n"
     assert checks.parse_signers(out) == [A, B]
+
+
+# build-tools 37.0.0 after a Play signing-key rotation, verbatim shape from Habit Observer 34
+# (FK-18: the GitHub runner refused it with "apksigner reported no signer").
+APKSIGNER_37_ROTATED = f"""V3.1 Signer: (minSdkVersion=33, maxSdkVersion=2147483647) certificate DN: CN=Android, OU=Android, O=Google Inc., L=Mountain View, ST=California, C=US
+V3.1 Signer: (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: {B}
+V3.1 Signer: (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-1 digest: afa92b07b0a25352a58a77ea7780724332f7cb79
+V3.0 Signer: (minSdkVersion=24, maxSdkVersion=32) certificate DN: CN=Android, OU=Android, O=Google Inc., L=Mountain View, ST=California, C=US
+V3.0 Signer: (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: {A}
+Source Stamp Signer: certificate SHA-256 digest: {C}
+"""
+
+
+def test_parse_signers_build_tools_37_rotated_range_after_colon():
+    assert checks.parse_signers(APKSIGNER_37_ROTATED) == [B, A]
+
+
+def test_parse_signer_certs_build_tools_37_rotated_pairs_dn():
+    from fdroidkit.add_app import parse_signer_certs
+    certs = parse_signer_certs(APKSIGNER_37_ROTATED)
+    assert [d for _, d in certs] == [B, A]
+    assert all("O=Google Inc." in dn for dn, _ in certs)

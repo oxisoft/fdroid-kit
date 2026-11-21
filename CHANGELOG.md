@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 (2026-11-21)
+
+- **Fix: rotated Play signing keys on Android build-tools 37.** After a key rotation apksigner 37
+  prints `V3.1 Signer: (minSdkVersion=33, ...) certificate ...`, with the colon before the SDK
+  range. 0.1.2 and earlier did not match that line, so `publish` refused such APKs with
+  "apksigner reported no signer" on GitHub's runners (build-tools 37). Found publishing Habit
+  Observer into the demo; tests now carry the verbatim output.
+
 ## 0.1.2 (2026-11-21)
 
 - **GitHub Release source** for apps you sign yourself (IzzyOnDroid style):
