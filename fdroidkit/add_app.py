@@ -27,6 +27,7 @@ _SIGNER_LINE = re.compile(
     # (build-tools 37; the range stays in the label so DN and digest pair per signer).
     r"^((?:V\d+(?:\.\d+)? )?Signer(?: #\d+| \([^)\n]*\))?(?:: \([^)\n]*\))?):? certificate (DN|SHA-256 digest): (.+)$", re.M)
 _BADGING_PKG = re.compile(r"name='([^']+)'")
+_LOCALE_RE = re.compile(r"^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
 
 LISTING_FILES = {
     "short_description.txt": "",
@@ -53,6 +54,7 @@ class AddAppOptions:
     from_github: str | None = None
     asset: str | None = None
     tag: str | None = None
+    locales: list[str] = field(default_factory=list)  # extra listing languages to scaffold
 
 
 def parse_signer_certs(apksigner_output: str) -> list[tuple[str, str]]:
@@ -136,6 +138,17 @@ def merge_pins(meta: str, new: list[str]) -> tuple[str, list[str]]:
     return meta, add
 
 
+def scaffold_listing(repo: Path, package: str, locale: str) -> Path:
+    """metadata/<package>/<locale>/ with empty listing files; existing files stay as they are."""
+    listing = repo / "metadata" / package / locale
+    (listing / "phoneScreenshots").mkdir(parents=True, exist_ok=True)
+    for fn, body in LISTING_FILES.items():
+        f = listing / fn
+        if not f.exists():
+            f.write_text(body)
+    return listing
+
+
 def add_app(o: AddAppOptions, runner: Callable | None = None, log=print) -> Path:
     from .publish import find_build_tools, metadata_path, run
 
@@ -149,6 +162,9 @@ def add_app(o: AddAppOptions, runner: Callable | None = None, log=print) -> Path
     bad = [p for p in pins if not _HEX64.match(p)]
     if bad:
         raise AddAppError(f"--pin needs a 64-hex SHA-256 digest, got {bad[0]!r}")
+    bad = [x for x in o.locales if not _LOCALE_RE.match(x)]
+    if bad:
+        raise AddAppError(f"--locale needs a locale like pl, de or pt-BR (fastlane style), got {bad[0]!r}")
     note = "Pins given with --pin."
     if o.from_github and o.discover_apk:
         raise AddAppError("--from-github and --discover-signer both name an APK: pass one")
@@ -179,10 +195,17 @@ def add_app(o: AddAppOptions, runner: Callable | None = None, log=print) -> Path
         note = ("Self-signed APK signer, read from " if o.not_play else
                 "Play App Signing key (DN O=Google Inc.), read from ") + apk.name + " by --discover-signer."
         log(f"signer{'s' if len(found) > 1 else ''} found: {', '.join(found)}")
-    if not pins:
-        raise AddAppError("nothing to pin: pass --discover-signer <apk> or --pin <sha256>")
-
     meta_file = metadata_path(repo, o.package)
+    if not pins and o.locales and meta_file.exists():
+        for loc in o.locales:  # a new language for an app that is already set up
+            log(f"listing: fill {scaffold_listing(repo, o.package, loc)}/short_description.txt, "
+                "full_description.txt")
+        log(f"next: fdroid update, then `fdroidkit site` with \"{o.locales[0]}\" in site.locales (fdroidkit.json)")
+        return meta_file
+    if not pins:
+        raise AddAppError("nothing to pin: pass --discover-signer <apk> or --pin <sha256>"
+                          + (" (--locale alone works once the app's metadata exists)" if o.locales else ""))
+
     if meta_file.exists():
         meta, added = merge_pins(meta_file.read_text(), pins)
         if not added:
@@ -190,18 +213,17 @@ def add_app(o: AddAppOptions, runner: Callable | None = None, log=print) -> Path
             return meta_file
         meta_file.write_text(meta)
         log(f"{meta_file}: pinned {len(added)} more signer(s) (key rotation); other fields untouched")
+        for loc in o.locales:
+            log(f"listing: fill {scaffold_listing(repo, o.package, loc)}/")
         return meta_file
 
     meta_file.parent.mkdir(parents=True, exist_ok=True)
     meta_file.write_text(render_metadata(o, pins, note))
-    listing = repo / "metadata" / o.package / "en-US"
-    (listing / "phoneScreenshots").mkdir(parents=True, exist_ok=True)
-    for fn, body in LISTING_FILES.items():
-        f = listing / fn
-        if not f.exists():
-            f.write_text(body)
+    listing = scaffold_listing(repo, o.package, "en-US")
     log(f"wrote {meta_file} with {len(pins)} pinned signer(s)")
     log(f"listing: fill {listing}/short_description.txt, full_description.txt, add icon.png and phoneScreenshots/")
+    for loc in o.locales:
+        log(f"listing ({loc}): fill {scaffold_listing(repo, o.package, loc)}/, missing fields fall back to en-US")
     if o.from_github:
         log(f"next: fdroidkit publish {o.package} --source github-release --dry-run")
     else:

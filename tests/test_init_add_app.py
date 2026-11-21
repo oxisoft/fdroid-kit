@@ -219,3 +219,43 @@ def test_add_app_cli_exit_codes(tmp_path, capsys):
     assert cli.main([*base]) == 3
     ok = fx.make_apk(tmp_path / "p.apk", "play", PKG, 13, "1.3.0")
     assert cli.main([*base, "--discover-signer", str(ok)]) == 0
+
+
+# ---- add-app --locale (FK-19) ----------------------------------------------
+
+def test_add_app_scaffolds_extra_locales(tmp_path):
+    repo = _repo(tmp_path)
+    add_app(_opts(repo, pins=[fx.PLAY], locales=["pl", "pt-BR"]), log=lambda *_: None)
+    for loc in ("en-US", "pl", "pt-BR"):
+        d = repo / "metadata" / PKG / loc
+        assert (d / "short_description.txt").exists() and (d / "full_description.txt").exists()
+
+
+def test_add_app_locale_alone_on_existing_app_keeps_texts(tmp_path):
+    repo = _repo(tmp_path)
+    meta = add_app(_opts(repo, pins=[fx.PLAY]), log=lambda *_: None)
+    before = meta.read_text()
+    (repo / "metadata" / PKG / "en-US" / "short_description.txt").write_text("Hello")
+    add_app(_opts(repo, locales=["de"]), log=lambda *_: None)
+    assert (repo / "metadata" / PKG / "de" / "short_description.txt").read_text() == ""
+    assert (repo / "metadata" / PKG / "en-US" / "short_description.txt").read_text() == "Hello"
+    assert meta.read_text() == before
+
+
+def test_add_app_locale_needs_existing_app_or_pins(tmp_path):
+    with pytest.raises(AddAppError, match="--locale alone works"):
+        add_app(_opts(_repo(tmp_path), locales=["pl"]), log=lambda *_: None)
+
+
+@pytest.mark.parametrize("bad", ["polish", "PL", "pl_PL", "../x", ""])
+def test_add_app_rejects_bad_locale(tmp_path, bad):
+    with pytest.raises(AddAppError, match="--locale"):
+        add_app(_opts(_repo(tmp_path), pins=[fx.PLAY], locales=[bad]), log=lambda *_: None)
+
+
+def test_add_app_cli_locale(tmp_path, capsys):
+    repo = _repo(tmp_path)
+    base = ["--repo", str(repo), "add-app", PKG, "--build-tools", str(BIN)]
+    assert cli.main([*base, "--pin", fx.PLAY, "--locale", "pl", "--locale", "ru"]) == 0
+    assert (repo / "metadata" / PKG / "ru").is_dir()
+    assert "listing (pl)" in capsys.readouterr().out

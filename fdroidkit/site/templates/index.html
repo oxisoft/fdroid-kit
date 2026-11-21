@@ -1,19 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="$lang">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>$title</title>
   <meta name="description" content="$description">
   <link rel="canonical" href="$canonical">
-  <link rel="icon" href="icon.png">
-  <link rel="stylesheet" href="site.css">
+  <link rel="icon" href="${base}icon.png">
+  <link rel="stylesheet" href="${base}site.css">
+$alternates
   <meta property="og:title" content="$title">
   <meta property="og:description" content="$description">
   <meta property="og:url" content="$canonical">
   <script type="application/ld+json">$jsonld</script>
 </head>
 <body>
+  $lang_switch
   <header class="top">
     $logo
     <div>

@@ -117,6 +117,9 @@ Optional `"token": {"env": "NAME"}` names the variable holding a GitHub token (d
 `$GITHUB_TOKEN`, only sent when set): public repos need none, a token lifts the anonymous rate
 limit and reads private repos. A literal token in the file is refused.
 
+`--locale pl` (repeatable) also scaffolds `metadata/<package>/pl/` next to `en-US/` for a
+translated listing. On an app that is already set up, `--locale` alone only adds the folder.
+
 ### publish
 
 Every step is a hard stop:
@@ -170,6 +173,22 @@ Each app also gets an **Add to Obtainium** link, for people who use
 Obtainium's F-Droid third-party repo source, so updates come from your signed index. Set
 `"obtainium": "redirect"` to send visitors without Obtainium to its install prompt (Obtainium's own
 redirect page, a third party), or `false` to hide the link.
+
+**Translated listings.** The index carries a name, summary and description per language
+(`metadata/<package>/<locale>/`). List the languages in `site.locales`, first one on the root page:
+
+```json
+{"site": {"locales": ["en-US", "pl", "ru"]}}
+```
+
+Every other locale gets its own page (`/pl/`, `/ru/`, lower case) with `<html lang>`, a canonical
+URL, `hreflang` alternates (plus `x-default`), a plain-link language switcher (no script, CSP
+safe) and an entry in sitemap.xml. A field a language lacks falls back to the same language in
+another region (`pl-PL` for `pl`), then to en-US. A locale the index has no text in at all still
+renders, in en-US, with a warning. The page's own words (headings, steps) stay English; only the
+listings are translated. Icons, APKs and the QR stay at the root, linked relative from each page.
+A custom `template` should use `$lang`, `${base}` before root asset paths, `$alternates` in the
+head and `$lang_switch` in the body. Default: en-US only, one page, as before.
 
 ### doctor
 

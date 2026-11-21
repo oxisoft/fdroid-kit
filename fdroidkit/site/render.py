@@ -29,6 +29,7 @@ ICON_PX = 192  # rows show icons at 84 px, 192 covers a 2x screen
 SCHEMA_CATEGORY = {"Games": "GameApplication", "Time": "ProductivityApplication",
                    "Security": "SecurityApplication", "Internet": "BrowserApplication"}
 HEX = re.compile(r"^#[0-9A-Fa-f]{3,8}$")
+LOCALE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
 
 
 class SiteError(RuntimeError):
@@ -50,6 +51,9 @@ class Brand:
     # "Add to Obtainium" per app: "direct" (obtainium:// link, no third party), "redirect"
     # (Obtainium's own redirect page, falls back to a "get Obtainium" prompt) or false (off).
     obtainium: str | bool = "direct"
+    # Listing languages, first = the root page; every other one gets /<locale>/ (lower case).
+    # Fields a locale lacks fall back to en-US, then to any language the index has.
+    locales: list = field(default_factory=lambda: ["en-US"])
 
 
 def load_brand(repo: Path) -> Brand:
@@ -67,14 +71,42 @@ def load_brand(repo: Path) -> Brand:
         b.obtainium = "direct"
     if b.obtainium not in (False, "direct", "redirect"):
         raise SiteError(f'{p}: site.obtainium must be "direct", "redirect" or false, got {b.obtainium!r}')
+    if isinstance(b.locales, str):
+        b.locales = [b.locales]
+    if not b.locales or not all(isinstance(x, str) and LOCALE.match(x) for x in b.locales):
+        raise SiteError(f'{p}: site.locales must be a list of locales like ["en-US", "pl"], got {b.locales!r}')
+    if len({x.lower() for x in b.locales}) != len(b.locales):
+        raise SiteError(f"{p}: site.locales lists a locale twice: {b.locales!r}")
     return b
 
 
 def pick(d, locale: str = "en-US"):
-    """index-v2 localises almost everything; take en-US or whatever exists."""
+    """index-v2 localises almost everything: the locale asked for, then the same language in
+    another region (pl for pl-PL and back), then en-US, then whatever exists."""
     if not isinstance(d, dict):
         return d
-    return d.get(locale) or (next(iter(d.values())) if d else None)
+    if d.get(locale):
+        return d[locale]
+    lang = locale.split("-")[0].lower()
+    for k, v in d.items():
+        if v and k.split("-")[0].lower() == lang:
+            return v
+    return d.get("en-US") or next((v for v in d.values() if v), None)
+
+
+def index_locales(data: dict) -> set[str]:
+    """Every locale the signed index carries a name, summary or description in."""
+    found = set()
+    for pkg in data.get("packages", {}).values():
+        md = pkg.get("metadata", {})
+        for k in ("name", "summary", "description"):
+            if isinstance(md.get(k), dict):
+                found.update(x for x, v in md[k].items() if v)
+    return found
+
+
+def locale_path(locale: str) -> str:
+    return locale.lower()
 
 
 def human_size(n: int) -> str:
@@ -154,13 +186,13 @@ def group_fp(fp: str) -> str:
 
 
 def _apps(repo: Path, data: dict, brand: Brand, out: Path, address: str = "",
-          author: str = "") -> list[dict]:
+          author: str = "", locale: str = "en-US") -> list[dict]:
     icon_dir = out / "appicons"
     icon_dir.mkdir(parents=True, exist_ok=True)
     apps = []
     packages = data.get("packages", {})
     for app_id, pkg in sorted(packages.items(),
-                              key=lambda kv: (pick(kv[1]["metadata"].get("name")) or kv[0]).lower()):
+                              key=lambda kv: (pick(kv[1]["metadata"].get("name"), locale) or kv[0]).lower()):
         md = pkg["metadata"]
         versions = sorted(pkg.get("versions", {}).values(),
                           key=lambda v: v["manifest"].get("versionCode", 0), reverse=True)
@@ -172,22 +204,22 @@ def _apps(repo: Path, data: dict, brand: Brand, out: Path, address: str = "",
             if src.exists():
                 write_icon(src, icon_dir / f"{app_id}.png")
                 icon = f"appicons/{app_id}.png"
-        raw_desc = pick(md.get("description")) or ""
+        raw_desc = pick(md.get("description"), locale) or ""
         fd_cat = (md.get("categories") or [""])[0]
         b = brand.badges.get(app_id, {})
-        phone = pick(md.get("screenshots", {}).get("phone")) or []
-        name = pick(md.get("name")) or app_id
+        phone = pick(md.get("screenshots", {}).get("phone"), locale) or []
+        name = pick(md.get("name"), locale) or app_id
         apps.append({
             "id": app_id,
             "name": name,
-            "summary": pick(md.get("summary")) or "",
+            "summary": pick(md.get("summary"), locale) or "",
             # Descriptions are hard-wrapped in metadata: unwrap, keep blank-line paragraphs.
             "description": [" ".join(p.split()) for p in re.split(r"\n\s*\n", raw_desc) if p.strip()],
             "icon": icon,
             "version": latest["manifest"].get("versionName", "?") if latest else "?",
             "size": human_size(latest["file"]["size"]) if latest else "",
             "apk": "fdroid/repo/" + latest["file"]["name"].lstrip("/") if latest else "",
-            "website": pick(md.get("webSite")) or "",
+            "website": pick(md.get("webSite"), locale) or "",
             "shots": ["fdroid/repo" + s["name"] for s in phone],
             "catLabel": b.get("category") or fd_cat,
             "tags": [t for t in b.get("tags", []) if t],
@@ -203,14 +235,14 @@ def _app_rows(apps: list[dict]) -> str:
     rows = []
     for n, a in enumerate(apps):
         lazy = ' loading="lazy"' if n else ""  # only the first row is reliably above the fold
-        img = (f'<img src="{e(a["icon"])}" alt="" width="84" height="84"{lazy} decoding="async">'
+        img = (f'<img src="{e(a.get("href_icon", a["icon"]))}" alt="" width="84" height="84"{lazy} decoding="async">'
                if a["icon"] else "")
         badges = ""
         if a["catLabel"] or a["tags"]:
             badges = ('<div class="badges">'
                       + (f'<span class="badge cat">{e(a["catLabel"])}</span>' if a["catLabel"] else "")
                       + "".join(f'<span class="badge">{e(t)}</span>' for t in a["tags"]) + "</div>")
-        dl = (f'<a class="applink" href="{e(a["apk"])}" aria-label="Download APK for {e(a["name"])}">'
+        dl = (f'<a class="applink" href="{e(a.get("href_apk", a["apk"]))}" aria-label="Download APK for {e(a["name"])}">'
               "Download APK</a>") if a["apk"] else ""
         if a.get("obtainium"):
             dl = ('<div class="appactions">' + dl
@@ -232,16 +264,18 @@ def _app_rows(apps: list[dict]) -> str:
     return "\n".join(rows)
 
 
-def structured_data(root: str, title: str, description: str, brand: Brand, apps: list[dict]) -> dict:
+def structured_data(root: str, title: str, description: str, brand: Brand, apps: list[dict],
+                    page_url: str = "", locale: str = "en-US") -> dict:
     org = None
     if brand.org_name:
         org = {"@type": "Organization", "@id": f"{(brand.org_url or root).rstrip('/')}/#organization",
                "name": brand.org_name}
         if brand.org_url:
             org["url"] = brand.org_url
+    page = page_url or f"{root}/"
     items = []
     for a in apps:
-        app = {"@type": "MobileApplication", "@id": f"{root}/#{a['id']}", "name": a["name"],
+        app = {"@type": "MobileApplication", "@id": f"{page}#{a['id']}", "name": a["name"],
                "description": a["summary"], "operatingSystem": "Android",
                "softwareVersion": a["version"], "fileSize": a["size"],
                "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}}
@@ -261,11 +295,11 @@ def structured_data(root: str, title: str, description: str, brand: Brand, apps:
             app["screenshot"] = [f"{root}/{s}" for s in a["shots"]]
         items.append(app)
     website = {"@type": "WebSite", "@id": f"{root}/#website", "url": f"{root}/", "name": title,
-               "description": description, "inLanguage": "en"}
+               "description": description, "inLanguage": locale}
     if org:
         website["publisher"] = {"@id": org["@id"]}
     graph = [website,
-             {"@type": "ItemList", "@id": f"{root}/#apps", "name": "Apps in the repository",
+             {"@type": "ItemList", "@id": f"{page}#apps", "name": "Apps in the repository",
               "numberOfItems": len(items),
               "itemListElement": [{"@type": "ListItem", "position": i + 1, "item": a}
                                   for i, a in enumerate(items)]}]
@@ -307,6 +341,7 @@ class Result:
     fingerprint: str
     apps: list
     qr: bool
+    pages: list = field(default_factory=lambda: ["index.html"])
 
 
 def render(repo: Path, out: Path, runner: Callable | None = None, log: Callable = print) -> Result:
@@ -321,57 +356,99 @@ def render(repo: Path, out: Path, runner: Callable | None = None, log: Callable 
         raise SiteError("index has no repo address (set repo_url in config.yml)")
     fp = keys.jar_fingerprint(repo / "repo" / "entry.jar", runner=runner)
     root = site_root(address, brand)
-    title = brand.title or pick(meta.get("name")) or "F-Droid repository"
-    description = brand.description or " ".join((pick(meta.get("description")) or "").split())
     out.mkdir(parents=True, exist_ok=True)
-    author = brand.org_name or title
-    apps = _apps(repo, data, brand, out, address, author)
-    e = html.escape
-    obtainium_note = ""
-    if any(a["obtainium"] for a in apps):
-        obtainium_note = ('<p class="alt-client">No F-Droid client? <a href="https://obtainium.imranr.dev/">'
-                          'Obtainium</a> can track each app straight from this repository: tap '
-                          '<em>Add to Obtainium</em> next to an app below.</p>')
+    have = index_locales(data)
+    for loc in brand.locales[1:]:
+        lang = loc.split("-")[0].lower()
+        if not any(h.split("-")[0].lower() == lang for h in have):
+            log(f"fdroidkit site: no listing in {loc} in the index, /{locale_path(loc)}/ shows the en-US texts "
+                f"(add metadata/<package>/{loc}/ and run `fdroid update`)")
 
     add_url = f"{address}?fingerprint={fp}"
     svg = qr_svg(add_url)
     if svg:
         (out / "qr.svg").write_text(svg)
-        qr_html = (f'<a class="qr" href="{e(add_url)}"><img src="qr.svg" width="200" '
-                   'height="200" alt="QR code to add this repository in F-Droid"></a>')
     else:
         log("fdroidkit site: no QR (pip install 'fdroidkit[site]' for the qrcode package)")
-        qr_html = ""
-    logo_html = ""
+    has_logo = False
     repo_icon = pick(meta.get("icon"))
     if isinstance(repo_icon, dict):
         src = repo / "repo" / repo_icon["name"].lstrip("/")
         if src.exists():
             write_icon(src, out / "icon.png")
-            logo_html = '<img class="logo" src="icon.png" alt="" width="64" height="64">'
-
-    count = len(apps)
-    links = " &middot; ".join(f'<a href="{e(x["url"])}">{e(x["label"])}</a>' for x in brand.footer_links)
-    org = f'<a href="{e(brand.org_url)}">{e(brand.org_name)}</a>' if brand.org_url else e(brand.org_name)
+            has_logo = True
     updated = datetime.datetime.fromtimestamp(meta.get("timestamp", 0) / 1000,
                                               datetime.timezone.utc).date().isoformat()
-    ld = json.dumps(structured_data(root, title, description, brand, apps),
-                    ensure_ascii=False).replace("</", "<\\/")
-    page = string.Template(_template(repo, brand, "index.html")).safe_substitute(
-        title=e(title), description=e(description), canonical=e(root + "/"),
-        logo=logo_html, address=e(address), add_url=e(add_url), qr=qr_html,
-        fingerprint=fp, fingerprint_grouped=group_fp(fp),
-        app_heading=f"{count} app{'s' if count != 1 else ''} in the repository",
-        apps=_app_rows(apps), obtainium_note=obtainium_note, org=org, footer_links=links, updated=updated, jsonld=ld)
-    (out / "index.html").write_text(page)
-    css = string.Template(_template(repo, brand, "site.css")).safe_substitute(accent=brand.accent)
-    (out / "site.css").write_text(css)
-    (out / "llms.txt").write_text(llms_txt(title, description, address, fp, root, apps, brand))
+    pages = [(loc, "" if n == 0 else locale_path(loc) + "/") for n, loc in enumerate(brand.locales)]
+    urls = [(loc, f"{root}/{sub}") for loc, sub in pages]
+    first_apps: list[dict] = []
+    for n, (loc, sub) in enumerate(pages):
+        apps = _page(repo, out, sub, loc, brand, data, meta, address, fp, root, add_url, bool(svg),
+                     has_logo, updated, urls)
+        if n == 0:
+            first_apps = apps
+            title = brand.title or pick(meta.get("name")) or "F-Droid repository"
+            description = brand.description or " ".join((pick(meta.get("description")) or "").split())
+            (out / "llms.txt").write_text(llms_txt(title, description, address, fp, root, apps, brand))
+    e = html.escape
     (out / "sitemap.xml").write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"  <url><loc>{e(root)}/</loc><lastmod>{updated}</lastmod></url>\n</urlset>\n")
+        + "".join(f"  <url><loc>{e(u)}</loc><lastmod>{updated}</lastmod></url>\n" for _, u in urls)
+        + "</urlset>\n")
     (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nSitemap: {root}/sitemap.xml\n")
     for p in [out, *out.rglob("*")]:
         p.chmod(0o755 if p.is_dir() else 0o644)  # rsync carries modes to the web root
-    return Result(out=out, fingerprint=fp, apps=[a["name"] for a in apps], qr=bool(svg))
+    return Result(out=out, fingerprint=fp, apps=[a["name"] for a in first_apps], qr=bool(svg),
+                  pages=[str(Path(sub) / "index.html") for _, sub in pages])
+
+
+def _page(repo: Path, out: Path, sub: str, locale: str, brand: Brand, data: dict, meta: dict,
+          address: str, fp: str, root: str, add_url: str, qr: bool, has_logo: bool, updated: str,
+          urls: list[tuple[str, str]]) -> list[dict]:
+    """One landing page: the root (sub "") or /<locale>/ (sub "pl/"), assets shared at the root."""
+    e = html.escape
+    up = "../" * sub.count("/")
+    title = brand.title or pick(meta.get("name"), locale) or "F-Droid repository"
+    description = brand.description or " ".join((pick(meta.get("description"), locale) or "").split())
+    author = brand.org_name or title
+    apps = _apps(repo, data, brand, out, address, author, locale)
+    for a in apps:  # page-relative paths, absolute ones in JSON-LD use root
+        a["href_icon"] = up + a["icon"] if a["icon"] else ""
+        a["href_apk"] = up + a["apk"] if a["apk"] else ""
+    obtainium_note = ""
+    if any(a["obtainium"] for a in apps):
+        obtainium_note = ('<p class="alt-client">No F-Droid client? <a href="https://obtainium.imranr.dev/">'
+                          'Obtainium</a> can track each app straight from this repository: tap '
+                          '<em>Add to Obtainium</em> next to an app below.</p>')
+    qr_html = (f'<a class="qr" href="{e(add_url)}"><img src="{up}qr.svg" width="200" '
+               'height="200" alt="QR code to add this repository in F-Droid"></a>') if qr else ""
+    logo_html = (f'<img class="logo" src="{up}icon.png" alt="" width="64" height="64">'
+                 if has_logo else "")
+    alternates = switch = ""
+    if len(urls) > 1:
+        alternates = "\n".join(f'  <link rel="alternate" hreflang="{e(loc)}" href="{e(u)}">' for loc, u in urls)
+        alternates += f'\n  <link rel="alternate" hreflang="x-default" href="{e(urls[0][1])}">'
+        here = f"{root}/{sub}"
+        switch = ('<nav class="langs" aria-label="Language">' + " ".join(
+            f'<a href="{e(u)}" hreflang="{e(loc)}" lang="{e(loc)}"'
+            + (' aria-current="page"' if u == here else "") + f">{e(loc)}</a>" for loc, u in urls) + "</nav>")
+    count = len(apps)
+    links = " &middot; ".join(f'<a href="{e(x["url"])}">{e(x["label"])}</a>' for x in brand.footer_links)
+    org = f'<a href="{e(brand.org_url)}">{e(brand.org_name)}</a>' if brand.org_url else e(brand.org_name)
+    canonical = f"{root}/{sub}"
+    ld = json.dumps(structured_data(root, title, description, brand, apps, canonical, locale),
+                    ensure_ascii=False).replace("</", "<\\/")
+    page = string.Template(_template(repo, brand, "index.html")).safe_substitute(
+        title=e(title), description=e(description), canonical=e(canonical),
+        logo=logo_html, address=e(address), add_url=e(add_url), qr=qr_html,
+        fingerprint=fp, fingerprint_grouped=group_fp(fp),
+        app_heading=f"{count} app{'s' if count != 1 else ''} in the repository",
+        apps=_app_rows(apps), obtainium_note=obtainium_note, org=org, footer_links=links, updated=updated,
+        jsonld=ld, lang=e(locale), base=up, alternates=alternates, lang_switch=switch)
+    (out / sub).mkdir(parents=True, exist_ok=True)
+    (out / sub / "index.html").write_text(page)
+    if not sub:
+        css = string.Template(_template(repo, brand, "site.css")).safe_substitute(accent=brand.accent)
+        (out / "site.css").write_text(css)
+    return apps

@@ -276,3 +276,105 @@ def test_bad_obtainium_value_is_refused(tmp_path):
     repo = make_repo(tmp_path, brand={"obtainium": "yes please"})
     with pytest.raises(rnd.SiteError, match="site.obtainium"):
         rnd.render(repo, Path("site"), runner=fake_runner())
+
+
+# ---- localized listings (FK-19) --------------------------------------------
+
+def localize(repo, by_app):
+    """Add locales to the signed index: {app_id: {locale: {field: text}}}, re-signing entry.json."""
+    rd = repo / "repo"
+    data = json.loads((rd / "index-v2.json").read_text())
+    for app_id, locs in by_app.items():
+        md = data["packages"][app_id]["metadata"]
+        for loc, fields in locs.items():
+            for k, v in fields.items():
+                md[k][loc] = v
+    raw = json.dumps(data).encode()
+    (rd / "index-v2.json").write_bytes(raw)
+    (rd / "entry.json").write_text(json.dumps({"index": {"name": "/index-v2.json",
+                                                          "sha256": hashlib.sha256(raw).hexdigest()}}))
+
+
+def test_pick_falls_back_per_field():
+    d = {"en-US": "en", "pl": "pl", "pt-BR": "br"}
+    assert rnd.pick(d, "pl") == "pl"
+    assert rnd.pick(d, "pl-PL") == "pl"          # same language, other region
+    assert rnd.pick(d, "pt") == "br"
+    assert rnd.pick(d, "de") == "en"             # missing: en-US
+    assert rnd.pick({"fr": "fr"}, "de") == "fr"  # no en-US: whatever exists
+    assert rnd.pick({"en-US": "en", "pl": ""}, "pl") == "en"  # empty text counts as missing
+    assert rnd.pick("plain", "pl") == "plain"
+
+
+def test_default_is_one_english_page(tmp_path):
+    repo = make_repo(tmp_path)
+    res = rnd.render(repo, Path("site"), runner=fake_runner())
+    page = (repo / "site" / "index.html").read_text()
+    assert res.pages == ["index.html"]
+    assert '<html lang="en-US">' in page and "hreflang" not in page and 'class="langs"' not in page
+    assert 'href="site.css"' in page and 'href="fdroid/repo/com.example.zeta_42.apk"' in page
+    assert not (repo / "site" / "pl").exists()
+
+
+def test_extra_locale_page_with_fallback(tmp_path):
+    repo = make_repo(tmp_path, brand={"locales": ["en-US", "pl"]})
+    localize(repo, {"com.example.alpha": {"pl": {"summary": "Pierwsza aplikacja",
+                                                 "description": "Opis\npo polsku."}}})
+    logs = []
+    res = rnd.render(repo, Path("site"), runner=fake_runner(), log=logs.append)
+    site = repo / "site"
+    en, pl = (site / "index.html").read_text(), (site / "pl" / "index.html").read_text()
+    assert res.pages == ["index.html", "pl/index.html"]
+    assert "First app" in en and "Pierwsza aplikacja" not in en
+    assert '<html lang="pl">' in pl
+    assert "Pierwsza aplikacja" in pl and "<p>Opis po polsku.</p>" in pl
+    assert "Does &lt;b&gt;things&lt;/b&gt;" in pl        # zeta has no pl: en-US summary
+    assert "<p>Line one wrapped.</p>" in pl              # and en-US description
+    # assets stay at the root, linked relative from the subpage
+    for ref in ('href="../site.css"', 'src="../qr.svg"', 'src="../appicons/com.example.alpha.png"',
+                'href="../fdroid/repo/com.example.zeta_42.apk"', 'src="../icon.png"'):
+        assert ref in pl, ref
+    assert not (site / "pl" / "appicons").exists() and not (site / "pl" / "site.css").exists()
+    # hreflang both ways, x-default, canonical per page, switcher without script
+    for page in (en, pl):
+        assert '<link rel="alternate" hreflang="en-US" href="https://fdroid.example.com/">' in page
+        assert '<link rel="alternate" hreflang="pl" href="https://fdroid.example.com/pl/">' in page
+        assert 'hreflang="x-default" href="https://fdroid.example.com/"' in page
+        assert '<nav class="langs"' in page
+        assert not re.search(r"<script(?![^>]*application/(ld\+)?json)", page) and " style=" not in page
+    assert '<link rel="canonical" href="https://fdroid.example.com/pl/">' in pl
+    assert 'href="https://fdroid.example.com/pl/" hreflang="pl" lang="pl" aria-current="page"' in pl
+    ld = json.loads(re.search(r'application/ld\+json">(.*?)</script>', pl, re.S).group(1))
+    site_node = next(n for n in ld["@graph"] if n["@type"] == "WebSite")
+    assert site_node["inLanguage"] == "pl"
+    sm = (site / "sitemap.xml").read_text()
+    assert "<loc>https://fdroid.example.com/</loc>" in sm and "<loc>https://fdroid.example.com/pl/</loc>" in sm
+    assert not logs or not any("no listing in pl" in x for x in logs)
+    # fingerprints on every page are checked, QR too
+    rep = vfy.verify(repo, Path("site"), runner=fake_runner())
+    assert rep.ok and rep.qr == "ok" and "pl/index.html" in rep.files
+
+
+def test_locale_missing_from_index_warns_and_falls_back(tmp_path):
+    repo = make_repo(tmp_path, brand={"locales": ["en-US", "de"]})
+    logs = []
+    rnd.render(repo, Path("site"), runner=fake_runner(), log=logs.append)
+    de = (repo / "site" / "de" / "index.html").read_text()
+    assert "First app" in de and '<html lang="de">' in de
+    assert any("no listing in de" in x for x in logs)
+
+
+def test_non_english_root_locale(tmp_path):
+    repo = make_repo(tmp_path, brand={"locales": ["pl", "en-US"]})
+    localize(repo, {"com.example.alpha": {"pl": {"summary": "Pierwsza"}}})
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    root = (repo / "site" / "index.html").read_text()
+    assert '<html lang="pl">' in root and "Pierwsza" in root
+    assert "First app" in (repo / "site" / "en-us" / "index.html").read_text()
+
+
+@pytest.mark.parametrize("bad", [[], ["en-US", "en-us"], ["english"], "x y", [3]])
+def test_bad_locales_are_refused(tmp_path, bad):
+    repo = make_repo(tmp_path, brand={"locales": bad})
+    with pytest.raises(rnd.SiteError, match="site.locales"):
+        rnd.render(repo, Path("site"), runner=fake_runner())

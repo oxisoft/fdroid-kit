@@ -56,6 +56,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--website", default="", help="WebSite field")
     s.add_argument("--source-code", default="", help="SourceCode field")
     s.add_argument("--build-tools", help="Android build-tools dir with aapt2 + apksigner")
+    s.add_argument("--locale", action="append", default=[], metavar="LOCALE",
+                   help="also scaffold metadata/<package>/<LOCALE>/ (repeatable, e.g. pl, de, pt-BR); "
+                        "alone it adds a language to an app that is already set up")
 
     s = sub.add_parser("publish", help="check an APK, add it, update the index, deploy, read back")
     s.add_argument("package")
@@ -160,7 +163,7 @@ def _add_app(args) -> int:
         pins=args.pin, not_play=args.not_play, name=args.name, license=args.license,
         website=args.website, source_code=args.source_code,
         build_tools=Path(args.build_tools) if args.build_tools else None,
-        from_github=args.from_github, asset=args.asset, tag=args.tag,
+        from_github=args.from_github, asset=args.asset, tag=args.tag, locales=args.locale,
     )
     try:
         add_app(o)

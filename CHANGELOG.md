@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Translated listings on the landing page.** `site.locales` in `fdroidkit.json` (default
+  `["en-US"]`, so existing sites do not change) renders one page per extra language (`/pl/`,
+  `/ru/`) from the localized names, summaries and descriptions in the signed index, with
+  `html lang`, canonical, `hreflang` + `x-default`, a no-script language switcher and every page
+  in sitemap.xml. Missing fields fall back per field: same language other region, then en-US.
+  `verify` checks the fingerprints on every page.
+- `add-app --locale xx` (repeatable) scaffolds `metadata/<package>/<xx>/`; alone it adds a
+  language to an app that is already set up.
+
 ## 0.1.3 (2026-11-21)
 
 - **Fix: rotated Play signing keys on Android build-tools 37.** After a key rotation apksigner 37
