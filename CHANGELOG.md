@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.4 (2026-11-21)
 
 - **Translated listings on the landing page.** `site.locales` in `fdroidkit.json` (default
   `["en-US"]`, so existing sites do not change) renders one page per extra language (`/pl/`,
