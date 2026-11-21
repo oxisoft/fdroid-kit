@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 (2026-11-21)
 
 - **`fdroidkit refresh`: metadata-only changes reach the live index.** A new translation, an
   edited description or new screenshots used to stay invisible until some app shipped a new
