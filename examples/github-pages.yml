@@ -14,10 +14,15 @@ name: publish to F-Droid
 on:
   workflow_dispatch:
     inputs:
-      package: { description: Application id, required: true }
-      version-code: { description: versionCode, required: true }
-      version-name: { description: versionName, required: true }
-      apk-url: { description: URL of the signed APK to publish, required: true }
+      source:
+        description: "file = publish the APK at apk-url; none = refresh the index after a metadata edit"
+        type: choice
+        options: [file, none]
+        default: file
+      package: { description: "Application id (empty for none)", required: false }
+      version-code: { description: versionCode, required: false }
+      version-name: { description: versionName, required: false }
+      apk-url: { description: "URL of the signed APK to publish (file only)", required: false }
 
 permissions:
   contents: write   # commit the bumped metadata back
@@ -34,6 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Fetch the APK
+        if: inputs.source == 'file'
         env:
           APK_URL: ${{ inputs.apk-url }}
         run: curl -fsSL --retry 3 -o "$RUNNER_TEMP/in.apk" "$APK_URL"
@@ -45,9 +51,10 @@ jobs:
           package: ${{ inputs.package }}
           version-code: ${{ inputs.version-code }}
           version-name: ${{ inputs.version-name }}
-          source: file
-          apk: ${{ runner.temp }}/in.apk
+          source: ${{ inputs.source }}
+          apk: ${{ inputs.source == 'file' && format('{0}/in.apk', runner.temp) || '' }}
       - name: Commit the bumped metadata
+        if: inputs.source != 'none'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

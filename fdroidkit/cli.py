@@ -85,6 +85,23 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-deploy", action="store_true",
                    help="skip `fdroid deploy` (static hosts that take an artifact, e.g. GitHub Pages)")
 
+    s = sub.add_parser("refresh", help="re-index and redeploy without a new APK (metadata/translation edits)")
+    s.add_argument("--restore", action="store_true",
+                   help="first download every APK the live index lists that is missing in repo/ "
+                        "(hosts that keep no APKs in git, e.g. GitHub Pages)")
+    s.add_argument("--dry-run", action="store_true", help="run the checks only, rebuild and deploy nothing")
+    s.add_argument("--fdroid", help="fdroid binary (default: fdroid on PATH, then ~/.local/bin/fdroid)")
+    s.add_argument("--live-url", help="public repo URL for restore and read-back (default: repo_url in config.yml)")
+    s.add_argument("--after-update", action="append", default=[], metavar="CMD",
+                   help="shell command run in the repo after `fdroid update` (repeatable)")
+    s.add_argument("--rsync-site", metavar="DEST", help="rsync <repo>/site/ to DEST after deploy (landing page)")
+    s.add_argument("--no-readback", action="store_true", help="skip the live index read-back")
+    s.add_argument("--no-deploy", action="store_true",
+                   help="skip `fdroid deploy` (static hosts that take an artifact, e.g. GitHub Pages)")
+
+    s = sub.add_parser("restore", help="download the APKs the live index lists into repo/")
+    s.add_argument("--live-url", help="public repo URL (default: repo_url in config.yml)")
+
     s = sub.add_parser("site", help="render the landing page from the signed index")
     s.add_argument("--out", default="site", help="output directory, relative to the repo (default: site)")
 
@@ -118,6 +135,10 @@ def main(argv: list[str] | None = None) -> int:
         return _add_app(args)
     if args.command == "publish":
         return _publish(args)
+    if args.command == "refresh":
+        return _refresh(args)
+    if args.command == "restore":
+        return _restore(args)
     if args.command == "site":
         return _site(args)
     if args.command == "verify":
@@ -199,6 +220,39 @@ def _publish(args) -> int:
     except (PublishError, RuntimeError) as e:
         print(f"fdroidkit publish: {e}", file=sys.stderr)
         return 3
+
+
+def _refresh(args) -> int:
+    from pathlib import Path
+
+    from .publish import PublishError
+    from .refresh import RefreshOptions, refresh
+
+    o = RefreshOptions(
+        repo=Path(args.repo), fdroid=args.fdroid, live_url=args.live_url, after_update=args.after_update,
+        rsync_site=args.rsync_site, readback=not args.no_readback, deploy=not args.no_deploy,
+        restore=args.restore, dry_run=args.dry_run,
+    )
+    try:
+        return refresh(o)
+    except (PublishError, RuntimeError, OSError) as e:
+        print(f"fdroidkit refresh: {e}", file=sys.stderr)
+        return 3
+
+
+def _restore(args) -> int:
+    from pathlib import Path
+
+    from .publish import PublishError, read_config
+    from .refresh import restore
+
+    repo = Path(args.repo).resolve()
+    try:
+        restore(repo, (args.live_url or read_config(repo).get("repo_url") or "").rstrip("/"))
+    except (PublishError, OSError) as e:
+        print(f"fdroidkit restore: {e}", file=sys.stderr)
+        return 3
+    return 0
 
 
 def _site(args) -> int:

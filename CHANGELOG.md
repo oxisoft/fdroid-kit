@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **`fdroidkit refresh`: metadata-only changes reach the live index.** A new translation, an
+  edited description or new screenshots used to stay invisible until some app shipped a new
+  APK, because `publish` refuses a duplicate versionCode and was the only path that ran
+  `fdroid update` + deploy. `refresh` rebuilds the index, runs the site hooks, deploys and reads
+  the new index timestamp back from the live repo; no APK added, no version bump. It refuses to
+  run when a published app has no APK locally (the new index would drop it); `--restore` fetches
+  the missing APKs from the live index first.
+- `fdroidkit restore`: just the download step, now shared with the GitHub Pages action.
+- Both actions take `source: none` for a refresh; `package` is optional then.
+
 ## 0.1.4 (2026-11-21)
 
 - **Translated listings on the landing page.** `site.locales` in `fdroidkit.json` (default

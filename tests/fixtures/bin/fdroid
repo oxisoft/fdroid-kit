@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -19,8 +20,9 @@ if cmd == "update":
     for apk in sorted(repo.glob("*.apk")):
         i = _fixture.info(apk)
         h = hashlib.sha256(apk.read_bytes()).hexdigest()
-        pk.setdefault(i["package"], {"versions": {}})["versions"][h] = {"manifest": {"versionCode": i["versionCode"]}}
-    (repo / "index-v2.json").write_text(json.dumps({"packages": pk}))
+        pk.setdefault(i["package"], {"versions": {}})["versions"][h] = {
+            "file": {"name": "/" + apk.name}, "manifest": {"versionCode": i["versionCode"]}}
+    (repo / "index-v2.json").write_text(json.dumps({"repo": {"timestamp": int(time.time() * 1000)}, "packages": pk}))
     (repo / "entry.jar").write_bytes(b"jar")
 elif cmd == "deploy":
     dest = Path(os.environ["FAKE_WEBROOT"]) / "fdroid" / "repo"

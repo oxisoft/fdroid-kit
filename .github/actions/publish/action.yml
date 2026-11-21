@@ -30,10 +30,14 @@ description: Publish an APK to an F-Droid repo kept in git and hosted on GitHub 
 # actions/deploy-pages (see examples/github-pages.yml). APKs need not live in git:
 # with restore: "true" (default) the action first downloads every APK the live index
 # lists. Commit metadata/ back to the branch (CurrentVersionCode moves on).
+#
+# source: none = refresh: no APK, no version bump; the index is rebuilt from the
+# committed metadata (new translation, edited description, screenshots) and shipped.
+# package may stay empty then.
 inputs:
   package:
-    description: Application id
-    required: true
+    description: Application id (empty for source none)
+    default: ""
   version-code:
     description: versionCode of the release (optional for source github-release, read from the APK)
     default: ""
@@ -44,7 +48,7 @@ inputs:
     description: Path of the F-Droid repo working tree, relative to the workspace
     default: fdroid
   source:
-    description: play | file | github-release
+    description: "play | file | github-release | none (refresh the index without a new APK)"
     default: file
   apk:
     description: APK path for source file
@@ -121,38 +125,9 @@ runs:
         IN_LIVE_URL: ${{ inputs.live-url }}
       run: |
         set -euo pipefail
-        "$FDROIDKIT_VENV/bin/python" - <<'PY'
-        import json, os, re, sys, urllib.error, urllib.request
-        from pathlib import Path
-        repo = Path(os.environ["IN_REPO"])
-        url = os.environ.get("IN_LIVE_URL") or ""
-        if not url:
-            m = re.search(r"^repo_url:\s*['\"]?([^'\"\s#]+)", (repo / "config.yml").read_text(), re.M)
-            url = m.group(1) if m else ""
-        if not url:
-            sys.exit("restore: no live URL (live-url input or repo_url in config.yml)")
-        url = url.rstrip("/")
-        try:
-            with urllib.request.urlopen(url + "/index-v2.json", timeout=60) as r:
-                index = json.load(r)
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                print(f"restore: {url}/index-v2.json not found, first publish")
-                sys.exit(0)
-            raise
-        (repo / "repo").mkdir(parents=True, exist_ok=True)
-        n = 0
-        for pkg in index.get("packages", {}).values():
-            for v in pkg.get("versions", {}).values():
-                name = v["file"]["name"].lstrip("/")
-                dest = repo / "repo" / name
-                if "/" in name or dest.exists():
-                    continue
-                print(f"restore: {name}")
-                urllib.request.urlretrieve(f"{url}/{name}", dest)
-                n += 1
-        print(f"restore: {n} APK(s) fetched from {url}")
-        PY
+        args=()
+        if [ -n "$IN_LIVE_URL" ]; then args+=(--live-url "$IN_LIVE_URL"); fi
+        "$FDROIDKIT_VENV/bin/fdroidkit" --repo "$IN_REPO" restore "${args[@]}"
 
     - name: Index key from secrets
       if: inputs.dry-run != 'true'
@@ -214,6 +189,17 @@ runs:
         unset PLAY_SA_JSON
 
         export PATH="$FDROIDKIT_VENV/bin:$PATH"
+        if [ "$IN_SOURCE" = "none" ]; then
+          r=(--no-deploy)
+          if [ -n "$IN_LIVE_URL" ]; then r+=(--live-url "$IN_LIVE_URL"); fi
+          if [ -n "$IN_FDROID" ]; then r+=(--fdroid "$IN_FDROID")
+          elif [ "$IN_DRY_RUN" != "true" ]; then r+=(--fdroid "$FDROIDKIT_VENV/bin/fdroid"); fi
+          if [ "$IN_READBACK" != "true" ]; then r+=(--no-readback); fi
+          if [ "$IN_DRY_RUN" = "true" ]; then r+=(--dry-run); fi
+          fdroidkit --repo "$IN_REPO" refresh "${r[@]}"
+          exit 0
+        fi
+        if [ -z "$IN_PACKAGE" ]; then echo "::error::package is required unless source is none"; exit 1; fi
         version=()
         if [ -n "$IN_CODE" ]; then version+=("$IN_CODE"); fi
         if [ -n "$IN_NAME" ]; then version+=("$IN_NAME"); fi

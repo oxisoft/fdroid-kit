@@ -59,6 +59,13 @@ versionName and the URL of the signed APK, or call the action from your app's re
 followed by a job with `actions/deploy-pages@v5` (environment `github-pages`, permissions
 `pages: write` + `id-token: write`).
 
+## Metadata-only changes (refresh)
+
+A new translation, an edited description or new screenshots need no new APK. Commit the
+metadata, then run the action with `source: none` (the example workflow offers it as a choice):
+it restores the APKs from the live site, rebuilds and signs the index, renders the landing page
+and uploads the Pages artifact; nothing is bumped, so there is nothing to commit back.
+
 What the action does: installs fdroidkit + fdroidserver in a venv, restores the APKs the
 live index lists (so APKs never go into git), writes the index key under `$RUNNER_TEMP`
 with umask 077, runs every fdroidkit check (identity, signer pins, versionCode, Play

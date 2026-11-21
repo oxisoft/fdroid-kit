@@ -67,6 +67,7 @@ fdroidkit init --name "Example Apps" --url https://fdroid.example.com/fdroid/rep
 fdroidkit add-app com.example.app --discover-signer app.apk
 fdroidkit publish com.example.app 42 1.4.0 --source play [--dry-run]
 fdroidkit publish com.example.app --source github-release --github-repo owner/name [--dry-run]
+fdroidkit refresh [--restore]   # re-index + deploy after a metadata edit, no new APK
 fdroidkit site          # landing page with fingerprint and add-repo QR, from the signed index
 fdroidkit verify        # every fingerprint on the page matches the index key
 fdroidkit doctor --url https://fdroid.example.com/fdroid/repo   # audit the live repo
@@ -145,6 +146,22 @@ Tools are found on their own: build-tools from `--build-tools`, `$ANDROID_HOME`,
 config.yml or `~/android`; `fdroid` on PATH; the live URL from `repo_url`. Exit codes: 0 ok,
 1 the APK was refused, 3 setup error. `--source play` needs `pip install 'fdroidkit[play]'`.
 
+### refresh
+
+`publish` refuses a versionCode that is already out, so a metadata-only change (a new
+translation, an edited description, new screenshots, a `Name:` fix) needs `refresh`: no APK is
+added and no version moves. It runs `fdroid update`, the `--after-update` hooks, `fdroid deploy`
+and `--rsync-site` like `publish`, then waits until the live `index-v2.json` carries the new
+index timestamp. `--restore` first downloads every APK the live index lists that is missing in
+`repo/` (`fdroidkit restore` does only that step). Before anything runs it refuses when an app
+whose metadata says it is published has no APK in `repo/` or `archive/`: `fdroid update` would
+silently drop that app from the index and the deploy would remove it for every user.
+
+```
+fdroidkit --repo /srv/fdroid refresh --after-update "fdroidkit site" --rsync-site host:/var/www/fdroid/
+fdroidkit --repo fdroid refresh --restore --no-deploy --no-readback   # Pages: ship repo/ as the artifact
+```
+
 ### site and verify
 
 ```
@@ -214,7 +231,7 @@ Gitea / Forgejo:
   with: { package: com.example.app, version-code: "42", version-name: "1.4.0", repo-path: /srv/fdroid }
 ```
 
-Inputs: `source` (play | file), `apk`, `live-url`, `after-update` (one command per line),
+Inputs: `source` (play | file | github-release | none), `apk`, `live-url`, `after-update` (one command per line),
 `rsync-site`, `readback`, `dry-run`, `build-tools`, `fdroid`, `python`. Secrets only as
 environment variables: `PLAY_SA_JSON` (or `PLAY_SA_FILE`) and the passphrase names your
 `config.yml` reads with `{env: NAME}`. The action installs fdroidkit from its own checkout into a
@@ -232,7 +249,8 @@ GitHub Actions + GitHub Pages (no server at all):
 
 The index key exists only under `$RUNNER_TEMP` (umask 077) for the job and is shredded in an
 `if: always()` step; APKs are restored from the live site, so they never go into git. Then
-`actions/deploy-pages`. Setup and limits: [docs/github-pages.md](docs/github-pages.md); a live
+`actions/deploy-pages`. Both actions take `source: none` to refresh the index after a
+metadata edit without a new APK (`package` may stay empty). Setup and limits: [docs/github-pages.md](docs/github-pages.md); a live
 demo: [oxisoft/fdroid-kit-example](https://github.com/oxisoft/fdroid-kit-example).
 
 Full examples in [examples/](examples/).
@@ -252,6 +270,7 @@ Full examples in [examples/](examples/).
 - v0.1.2: GitHub Release source with self-signed pins (`--source github-release`, `add-app --from-github`).
 - v0.1.3: fix for rotated Play signing keys on build-tools 37.
 - v0.1.4: translated listings on the landing page (`site.locales`, `add-app --locale`).
+- v0.1.5: `refresh` (metadata-only changes reach the live index), `restore`, `source: none` in both actions.
 
 ## In production
 

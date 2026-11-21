@@ -21,10 +21,14 @@ description: Publish the Play-signed universal APK of a release to your own F-Dr
 #                  and reads private repos; public repos need none.
 #   index key passphrases: whatever names config.yml reads with `{env: NAME}`
 #                  (`fdroidkit init` writes FDROID_KEYSTORE_PASS / FDROID_KEY_PASS).
+#
+# source: none = refresh: no APK, no version bump; `fdroid update` + deploy rebuild the
+# index from the metadata (new translation, edited description, screenshots). package
+# may stay empty then.
 inputs:
   package:
-    description: Application id
-    required: true
+    description: Application id (empty for source none)
+    default: ""
   version-code:
     description: versionCode of the release (optional for source github-release, read from the APK)
     default: ""
@@ -35,7 +39,7 @@ inputs:
     description: Path of the F-Droid repo working tree on the runner
     required: true
   source:
-    description: play | file | github-release
+    description: "play | file | github-release | none (refresh the index without a new APK)"
     default: play
   apk:
     description: APK path for source file
@@ -138,6 +142,20 @@ runs:
 
         # after-update commands may call `fdroidkit site`: the venv goes first on PATH.
         export PATH="$FDROIDKIT_VENV/bin:$PATH"
+        if [ "$IN_SOURCE" = "none" ]; then
+          r=()
+          if [ -n "$IN_LIVE_URL" ]; then r+=(--live-url "$IN_LIVE_URL"); fi
+          if [ -n "$IN_RSYNC_SITE" ]; then r+=(--rsync-site "$IN_RSYNC_SITE"); fi
+          if [ -n "$IN_FDROID" ]; then r+=(--fdroid "$IN_FDROID"); fi
+          if [ "$IN_READBACK" = "false" ]; then r+=(--no-readback); fi
+          if [ "$IN_DRY_RUN" = "true" ]; then r+=(--dry-run); fi
+          while IFS= read -r cmd; do
+            if [ -n "${cmd// }" ]; then r+=(--after-update "$cmd"); fi
+          done <<< "$IN_AFTER_UPDATE"
+          fdroidkit --repo "$IN_REPO" refresh "${r[@]}"
+          exit 0
+        fi
+        if [ -z "$IN_PACKAGE" ]; then echo "::error::package is required unless source is none"; exit 1; fi
         # fdroidkit publishes under umask 022 itself (served files must be world-readable).
         version=()
         if [ -n "$IN_CODE" ]; then version+=("$IN_CODE"); fi

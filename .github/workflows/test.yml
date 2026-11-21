@@ -73,6 +73,20 @@ jobs:
           test -e "$fx/fdroid/after-update-1" && grep -q "^fdroidkit " "$fx/fdroid/after-update-2"
           test -e "$fx/www/fdroid/repo/com.example.app_13.apk"
           test "$(stat -c %a "$fx/fdroid/repo/com.example.app_13.apk")" = 644
+      - name: Refresh (source none, no APK, stand-in fdroid)
+        uses: ./actions/gitea
+        env:
+          FAKE_WEBROOT: ${{ runner.temp }}/fx/www
+        with:
+          repo-path: ${{ runner.temp }}/fx/fdroid
+          source: none
+          fdroid: ${{ github.workspace }}/tests/fixtures/bin/fdroid
+          readback: "false"
+      - name: Refreshed without a version bump
+        run: |
+          fx="$RUNNER_TEMP/fx"
+          grep -q "CurrentVersionCode: 13" "$fx/fdroid/metadata/com.example.app.yml"
+          test "$(tr '\n' ' ' < "$fx/fdroid/fdroid-calls.log")" = "update deploy update deploy "
 
   # The GitHub Pages composite action on the same fixture: key handling, publish without
   # `fdroid deploy`, and the if: always() wipe. Real fdroidserver + Pages run end to end
