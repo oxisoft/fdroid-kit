@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 (2026-11-21)
 
 - **GitHub Release source** for apps you sign yourself (IzzyOnDroid style):
   `fdroidkit publish <package> --source github-release --github-repo owner/name [--asset GLOB]
@@ -12,6 +12,8 @@
   `{"env": NAME}` (default `$GITHUB_TOKEN`), never required for public repos.
 - Both actions take `source: github-release` with `github-repo`, `asset` and `tag` inputs;
   `version-code` and `version-name` are optional for that source.
+- Docs: GitHub Pages limits for big APKs (the 100 MB file limit is git only; the 1 GB site cap,
+  10 minute deploy and 100 GB/month bandwidth are what count). Actions and examples pin `@v0.1.2`.
 
 ## 0.1.1 (2026-11-20)
 

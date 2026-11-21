@@ -44,7 +44,7 @@ Run the workflow (Actions > publish to F-Droid > Run workflow) with the package,
 versionName and the URL of the signed APK, or call the action from your app's release job:
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.1
+- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.2
   env:
     FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
     FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
@@ -71,5 +71,15 @@ artifact, and in an `if: always()` step shreds the key and the venv.
 - GitHub Pages sites are capped at 1 GB and artifacts at 10 GB; a Flutter APK is about
   50 MB, so keep `archive_older` small. The restore step only brings back what the
   current index lists: archived versions are not restored and drop out of the archive.
+- Big APKs are fine: the 100 MB per-file limit is a git push limit, and the action deploys
+  a Pages artifact, not a commit. The demo serves OxiTalk's 202 MB APK from Pages (HTTP 200,
+  range requests work). What does bite with big APKs: the 1 GB site cap counts every version
+  the index keeps (four 200 MB versions fill it), deployments time out after 10 minutes, and
+  the soft bandwidth limit of 100 GB per month is about 500 downloads of a 200 MB APK. For
+  an app that size keep `archive_older` at 1 or 2, and if downloads outgrow the bandwidth,
+  move the repo to your own server (Gitea action) rather than Pages.
+- An app you sign yourself and release on GitHub can be published straight from its release:
+  `source: github-release` with `github-repo: owner/name` (and optional `asset`, `tag`);
+  versionCode and versionName are read from the APK.
 - Pages is public even for a private repository on paid plans: the repo is public by nature.
 - The live read-back happens after deploy-pages, in a later job (`fdroidkit verify --live`).
