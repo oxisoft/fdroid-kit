@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Community health files and a migration guide.** `CONTRIBUTING.md` (dev setup, fixture and
+  no-real-keys rules, PR checklist), `SECURITY.md` (private reports via GitHub security
+  advisories; scope: index key handling, secrets in the actions, check bypasses), issue forms
+  (bug report asks for the fdroidkit and fdroidserver versions and `doctor --json`) and a PR
+  template. `docs/migrating.md` moves a hand-run fdroidserver repo to the kit and keeps its index
+  key, tested end to end on a repo made with `fdroid init`. `docs/signing-model.md` no longer
+  claims a keystore-in-tree guard that `publish` does not have.
+
 - **`doctor` as a reusable action, for a scheduled audit of your own repo.**
   `.github/actions/doctor` (GitHub: job summary, JSON report artifact, annotations) and
   `actions/doctor` (Gitea / Forgejo) run `fdroidkit doctor` and fail the run on a failed check

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/oxisoft/fdroid-kit/security/advisories/new
+    about: Private report for key handling, secrets in the actions or check bypasses. Never a public issue.
+  - name: fdroidserver bug
+    url: https://gitlab.com/fdroid/fdroidserver/-/issues
+    about: Problems in fdroid update, deploy or the index format itself go upstream.
+  - name: Docs
+    url: https://github.com/oxisoft/fdroid-kit#docs
+    about: Setup traps, signing model, GitHub Pages, doctor checks and the migration guide.

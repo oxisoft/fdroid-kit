@@ -1,0 +1,63 @@
+name: Bug report
+description: A command or action did the wrong thing, crashed or refused a valid APK.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. A security problem (a leaked key, a secret in a log, a check bypass)
+        does not belong here: report it privately, see SECURITY.md.
+        Never paste a keystore, passphrase, service account JSON or token below.
+  - type: input
+    id: fdroidkit-version
+    attributes:
+      label: fdroidkit version
+      description: Output of `fdroidkit --version`, or the action tag you use (e.g. `@v0.1.5`).
+    validations:
+      required: true
+  - type: input
+    id: fdroidserver-version
+    attributes:
+      label: fdroidserver version
+      description: Output of `fdroid --version`. Add the build-tools version if the APK checks are involved.
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it run?
+      options:
+        - Local command line
+        - Gitea / Forgejo action
+        - GitHub action (GitHub Pages)
+        - doctor action
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or workflow step
+      description: The exact command (or the `uses:` step with its inputs), with secrets left out.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected
+      description: Paste the full output of the failing run.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: fdroidkit doctor --json
+      description: |
+        If your repo is live: `fdroidkit doctor --url https://your.host/fdroid/repo --json`
+        (add `--repo <working tree>` for the pin and version checks). It reads only public data.
+      render: json
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: OS, Python version, Play App Signing or self-signed, a rotated signing key, links.

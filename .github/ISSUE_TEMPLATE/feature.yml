@@ -1,0 +1,26 @@
+name: Feature request
+description: A missing check, command, source or host the kit should support.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do with your F-Droid repo, and where does the kit get in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The command, flag or action input you have in mind, and what it should check or refuse.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today
+      description: Workarounds, other tools, the fdroidserver commands you run by hand.
+  - type: input
+    id: version
+    attributes:
+      label: fdroidkit version
+      description: Output of `fdroidkit --version`.

@@ -23,7 +23,9 @@ config holds no secret and can be committed.
 
 ## Guards
 
-- `publish` refuses to run when a keystore or `*.pass` file sits inside the git tree.
+- `init` creates the key outside the tree and writes a `.gitignore` for keystores and `*.pass`
+  files, so `git add .` cannot pick them up. (No command checks the tree for a key placed there
+  by hand: keep it outside, see [migrating.md](migrating.md) step 1.)
 - Public files are written under umask 022 (see setup-traps.md, the entry.jar 403).
 
 ## Losing the index key

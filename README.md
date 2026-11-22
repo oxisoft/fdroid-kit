@@ -291,6 +291,7 @@ Full examples in [examples/](examples/).
 - [Setup traps](docs/setup-traps.md)
 - [GitHub Pages](docs/github-pages.md): repo on a hosted runner + Pages, key from secrets.
 - [doctor](docs/doctor.md): what each live check reads and how to fix a failure.
+- [Migrating](docs/migrating.md): move a hand-run fdroidserver repo to the kit and keep its index key.
 
 ## Roadmap
 
@@ -314,7 +315,8 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/pytest
 
 Source: [g.oxisoft.io/oxisoft/fdroid-kit](https://g.oxisoft.io/oxisoft/fdroid-kit), mirrored to
 [github.com/oxisoft/fdroid-kit](https://github.com/oxisoft/fdroid-kit). Issues and pull requests
-are welcome on GitHub.
+are welcome on GitHub: see [CONTRIBUTING.md](CONTRIBUTING.md) (setup, fixture rules, PR checklist).
+Found a key handling or secrets problem? Report it privately, see [SECURITY.md](SECURITY.md).
 
 ## License
 
