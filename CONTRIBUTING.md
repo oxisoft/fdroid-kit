@@ -3,6 +3,7 @@
 Thanks for helping. Bug reports, fixes, docs and new checks for real F-Droid traps are all
 welcome. Issues and pull requests go to [github.com/oxisoft/fdroid-kit](https://github.com/oxisoft/fdroid-kit).
 A security problem (a leaked key, a secret in a log) is not an issue: see [SECURITY.md](SECURITY.md).
+Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Dev setup
 
