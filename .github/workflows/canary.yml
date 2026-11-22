@@ -1,0 +1,82 @@
+# Weekly canary: the kit against the NEWEST upstream tools, plus a doctor run on the live
+# repos that use it. Upstream breakage (build-tools 37 changed apksigner's signer lines,
+# FK-18) shows up here as a red run (GitHub mails the owner) before a user's release hits it.
+name: canary
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"   # Monday 05:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upstream:
+    name: newest fdroidserver + build-tools
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Newest build-tools + platform
+        id: sdk
+        run: |
+          set -euo pipefail
+          sm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          list="$("$sm" --list 2>/dev/null)"
+          pick() { printf '%s\n' "$list" | awk '{print $1}' | grep -E "^$1;[0-9][0-9.]*$" | sort -t';' -k2 -V | tail -1; }
+          bt="$(pick build-tools)"
+          pf="$(printf '%s\n' "$list" | awk '{print $1}' | grep -E '^platforms;android-[0-9]+(\.[0-9]+)?$' | sort -t- -k2 -V | tail -1)"
+          echo "installing $bt $pf"
+          "$sm" --install "$bt" "$pf" > /dev/null < <(yes)
+          echo "build-tools=$ANDROID_HOME/build-tools/${bt#build-tools;}" >> "$GITHUB_OUTPUT"
+          echo "android-jar=$ANDROID_HOME/platforms/${pf#platforms;}/android.jar" >> "$GITHUB_OUTPUT"
+          echo "- build-tools: \`${bt#build-tools;}\`, platform: \`${pf#platforms;}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install the kit + newest fdroidserver
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet -e '.[dev,site]'
+          python -m pip install --quiet --upgrade fdroidserver
+          v="$(python -m pip show fdroidserver | awk '/^Version:/{print $2}')"
+          echo "fdroidserver $v"
+          echo "- fdroidserver: \`$v\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test suite
+        run: pytest -q
+
+      - name: Real aapt2 + apksigner (one key, rotated key)
+        run: >
+          python tests/canary/real_tools.py
+          --build-tools "${{ steps.sdk.outputs.build-tools }}"
+          --android-jar "${{ steps.sdk.outputs.android-jar }}"
+
+      - name: End to end with the real fdroid (init, add-app, publish, site, verify)
+        run: tests/canary/e2e.sh "$RUNNER_TEMP/e2e" "${{ steps.sdk.outputs.build-tools }}"
+
+  doctor:
+    name: doctor ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: fdroid-kit-example
+            url: https://oxisoft.github.io/fdroid-kit-example/fdroid/repo
+          - name: fdroid.oxisoft.io
+            url: https://fdroid.oxisoft.io/fdroid/repo
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/doctor
+        with:
+          url: ${{ matrix.url }}
+          artifact-name: doctor-${{ matrix.name }}

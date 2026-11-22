@@ -253,6 +253,35 @@ The index key exists only under `$RUNNER_TEMP` (umask 077) for the job and is sh
 metadata edit without a new APK (`package` may stay empty). Setup and limits: [docs/github-pages.md](docs/github-pages.md); a live
 demo: [oxisoft/fdroid-kit-example](https://github.com/oxisoft/fdroid-kit-example).
 
+### Scheduled health check of your own repo
+
+The `doctor` action runs the audit on a schedule; a failed check turns the run red, and GitHub
+or Gitea mails you before your users notice a broken certificate, a stale CDN index or a
+missing pin. Read only, no secrets, no checkout needed.
+
+```yaml
+on:
+  schedule: [{ cron: "17 6 * * 1" }]
+  workflow_dispatch:
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: oxisoft/fdroid-kit/.github/actions/doctor@main
+        with: { url: https://fdroid.example.com/fdroid/repo }
+```
+
+Gitea / Forgejo: `uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@main` on any runner
+with Python 3.10+. Inputs: `url`, `repo-path` (adds the pin and version checks), `site-url`,
+`all-versions`, `apk-scan`, `fail-on-warn`; outputs `report` (JSON path) and `ok`. The GitHub
+action also writes a job summary and uploads the JSON as an artifact. Pin a release tag once one
+ships the action (next after v0.1.5). Full workflow: [examples/doctor-weekly.yml](examples/doctor-weekly.yml).
+
+The kit itself runs the same check weekly ([canary.yml](.github/workflows/canary.yml)) against
+its live users, plus its test suite, a real aapt2 + apksigner parse (one key and a rotated key)
+and an end to end publish with the newest fdroidserver and Android build-tools, so an upstream
+format change breaks the canary, not your release.
+
 Full examples in [examples/](examples/).
 
 ## Docs

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **`doctor` as a reusable action, for a scheduled audit of your own repo.**
+  `.github/actions/doctor` (GitHub: job summary, JSON report artifact, annotations) and
+  `actions/doctor` (Gitea / Forgejo) run `fdroidkit doctor` and fail the run on a failed check
+  (`fail-on-warn` for warnings too). Read only, no secrets. Example:
+  `examples/doctor-weekly.yml`.
+- **Weekly canary against the newest upstream tools.** `canary.yml` installs the newest
+  fdroidserver from PyPI and the newest Android build-tools, runs the tests, builds and signs a
+  real APK (one key, then a rotated key with a v3.1 lineage) to check the signer parser against
+  the real apksigner, publishes it end to end through the real `fdroid update`, and runs doctor on
+  fdroid.oxisoft.io and the fdroid-kit-example demo. build-tools 37 broke signer parsing once
+  (0.1.3) and was found by a release; now a red canary finds it first.
+
 ## 0.1.5 (2026-11-21)
 
 - **`fdroidkit refresh`: metadata-only changes reach the live index.** A new translation, an

@@ -1,0 +1,107 @@
+name: fdroidkit doctor
+description: Audit a live F-Droid repo the way users' clients see it (TLS, signed index, landing page, pins, pairip, versions).
+# Gitea / Forgejo Actions composite action (twin of .github/actions/doctor). Schedule it
+# so a broken repo turns a run red before your users notice:
+#
+#   on:
+#     schedule: [{cron: "17 6 * * 1"}]
+#     workflow_dispatch:
+#   jobs:
+#     doctor:
+#       runs-on: <your runner>
+#       steps:
+#         - uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.5
+#           with:
+#             url: https://fdroid.example.com/fdroid/repo
+#
+# Read only, no secrets. Needs python3 (3.10+) on the runner. With repo-path (the runner's
+# F-Droid working tree) it also checks signers against the pins and the live versions
+# against CurrentVersionCode. The JSON report path is the `report` output and is kept
+# under report-dir when given (artifact upload differs between Gitea and Forgejo, so this
+# action leaves it to the caller).
+inputs:
+  url:
+    description: Public repo URL ending in /repo (default repo_url in config.yml of repo-path)
+    default: ""
+  repo-path:
+    description: Optional F-Droid working tree for the pin and version checks
+    default: ""
+  site-url:
+    description: Landing page URL (default fdroidkit.json site_url, else the repo URL without /fdroid/repo)
+    default: ""
+  all-versions:
+    description: "true = scan every served APK for pairip, not only the newest per app"
+    default: "false"
+  apk-scan:
+    description: "false = skip the pairip scan (no APK bytes read)"
+    default: "true"
+  fail-on-warn:
+    description: "true = a warning fails the step too (default: only failed checks do)"
+    default: "false"
+  report-dir:
+    description: Directory for doctor.json (default a temp dir)
+    default: ""
+  python:
+    description: Python interpreter for the action's venv
+    default: python3
+outputs:
+  report:
+    description: Path of the JSON report
+    value: ${{ steps.doctor.outputs.report }}
+  ok:
+    description: "\"true\" when no check failed"
+    value: ${{ steps.doctor.outputs.ok }}
+runs:
+  using: composite
+  steps:
+    - name: Install fdroidkit
+      shell: bash
+      env:
+        KIT: ${{ github.action_path }}/../..
+        PY: ${{ inputs.python }}
+      run: |
+        set -euo pipefail
+        venv="${RUNNER_TEMP:-/tmp}/fdroidkit-doctor-venv-${GITHUB_RUN_ID:-local}"
+        rm -rf "$venv"
+        "$PY" -m venv "$venv"
+        "$venv/bin/pip" install --quiet --disable-pip-version-check "$(cd "$KIT" && pwd)[site]"
+        "$venv/bin/fdroidkit" --version
+        echo "FDROIDKIT_DOCTOR_VENV=$venv" >> "$GITHUB_ENV"
+
+    - name: Doctor
+      id: doctor
+      shell: bash
+      env:
+        IN_URL: ${{ inputs.url }}
+        IN_REPO: ${{ inputs.repo-path }}
+        IN_SITE: ${{ inputs.site-url }}
+        IN_ALL: ${{ inputs.all-versions }}
+        IN_APK: ${{ inputs.apk-scan }}
+        IN_STRICT: ${{ inputs.fail-on-warn }}
+        IN_DIR: ${{ inputs.report-dir }}
+        SUMMARY: ${{ github.action_path }}/summary.py
+      run: |
+        set -euo pipefail
+        args=(--json)
+        if [ -n "$IN_URL" ]; then args+=(--url "$IN_URL"); fi
+        if [ -n "$IN_REPO" ]; then args+=(--repo "$IN_REPO"); fi
+        if [ -n "$IN_SITE" ]; then args+=(--site-url "$IN_SITE"); fi
+        if [ "$IN_ALL" = "true" ]; then args+=(--all-versions); fi
+        if [ "$IN_APK" = "false" ]; then args+=(--no-apk); fi
+        out="${IN_DIR:-${RUNNER_TEMP:-/tmp}/fdroidkit-doctor-${GITHUB_RUN_ID:-local}}"
+        mkdir -p "$out"
+        report="$out/doctor.json"
+        rc=0
+        "$FDROIDKIT_DOCTOR_VENV/bin/fdroidkit" doctor "${args[@]}" > "$report" || rc=$?
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+        if [ "$rc" = 3 ] || [ ! -s "$report" ]; then
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          echo "::error::fdroidkit doctor could not read the repo (exit $rc)"
+          exit 1
+        fi
+        strict=()
+        if [ "$IN_STRICT" = "true" ]; then strict=(--fail-on-warn); fi
+        "$FDROIDKIT_DOCTOR_VENV/bin/python" "$SUMMARY" "$report" "${strict[@]}" || rc=1
+        "$FDROIDKIT_DOCTOR_VENV/bin/python" "$SUMMARY" "$report" --annotations "${strict[@]}" || true
+        if [ "$rc" = 0 ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+        exit "$rc"

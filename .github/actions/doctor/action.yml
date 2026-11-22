@@ -1,0 +1,123 @@
+name: fdroidkit doctor
+description: Audit a live F-Droid repo the way users' clients see it (TLS, signed index, landing page, pins, pairip, versions).
+# GitHub Actions composite action. Run it on a schedule so a broken repo turns a run red
+# (GitHub mails the workflow owner) before your users notice:
+#
+#   on:
+#     schedule: [{cron: "17 6 * * 1"}]
+#     workflow_dispatch:
+#   jobs:
+#     doctor:
+#       runs-on: ubuntu-latest
+#       steps:
+#         - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.5
+#           with:
+#             url: https://fdroid.example.com/fdroid/repo
+#
+# Read only: no secrets, no checkout needed. With repo-path (a checkout of your F-Droid
+# working tree) it also checks every served signer against the pins in metadata/ and the
+# live versions against CurrentVersionCode. The JSON report is written to the `report`
+# output path and, with artifact: "true", uploaded as an artifact.
+inputs:
+  url:
+    description: Public repo URL ending in /repo (default repo_url in config.yml of repo-path)
+    default: ""
+  repo-path:
+    description: Optional F-Droid working tree (needs a checkout) for the pin and version checks
+    default: ""
+  site-url:
+    description: Landing page URL (default fdroidkit.json site_url, else the repo URL without /fdroid/repo)
+    default: ""
+  all-versions:
+    description: "true = scan every served APK for pairip, not only the newest per app"
+    default: "false"
+  apk-scan:
+    description: "false = skip the pairip scan (no APK bytes read)"
+    default: "true"
+  fail-on-warn:
+    description: "true = a warning fails the step too (default: only failed checks do)"
+    default: "false"
+  artifact:
+    description: "true = upload the JSON report as an artifact"
+    default: "true"
+  artifact-name:
+    description: Artifact name (must be unique per job when the action runs more than once)
+    default: fdroidkit-doctor
+  python-version:
+    description: Python for the action's venv
+    default: "3.12"
+outputs:
+  report:
+    description: Path of the JSON report
+    value: ${{ steps.doctor.outputs.report }}
+  ok:
+    description: "\"true\" when no check failed"
+    value: ${{ steps.doctor.outputs.ok }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v7
+      id: py
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install fdroidkit
+      shell: bash
+      env:
+        KIT: ${{ github.action_path }}/../../..
+        PY: ${{ steps.py.outputs.python-path }}
+      run: |
+        set -euo pipefail
+        venv="$RUNNER_TEMP/fdroidkit-doctor-venv"
+        rm -rf "$venv"
+        "$PY" -m venv "$venv"
+        "$venv/bin/pip" install --quiet --disable-pip-version-check "$(cd "$KIT" && pwd)[site]"
+        "$venv/bin/fdroidkit" --version
+        echo "FDROIDKIT_DOCTOR_VENV=$venv" >> "$GITHUB_ENV"
+
+    - name: Doctor
+      id: doctor
+      shell: bash
+      env:
+        IN_URL: ${{ inputs.url }}
+        IN_REPO: ${{ inputs.repo-path }}
+        IN_SITE: ${{ inputs.site-url }}
+        IN_ALL: ${{ inputs.all-versions }}
+        IN_APK: ${{ inputs.apk-scan }}
+        IN_STRICT: ${{ inputs.fail-on-warn }}
+        IN_NAME: ${{ inputs.artifact-name }}
+        SUMMARY: ${{ github.action_path }}/../../../actions/doctor/summary.py
+      run: |
+        set -euo pipefail
+        args=(--json)
+        if [ -n "$IN_URL" ]; then args+=(--url "$IN_URL"); fi
+        if [ -n "$IN_REPO" ]; then args+=(--repo "$IN_REPO"); fi
+        if [ -n "$IN_SITE" ]; then args+=(--site-url "$IN_SITE"); fi
+        if [ "$IN_ALL" = "true" ]; then args+=(--all-versions); fi
+        if [ "$IN_APK" = "false" ]; then args+=(--no-apk); fi
+        out="$RUNNER_TEMP/$IN_NAME"
+        mkdir -p "$out"
+        report="$out/doctor.json"
+        rc=0
+        "$FDROIDKIT_DOCTOR_VENV/bin/fdroidkit" doctor "${args[@]}" > "$report" || rc=$?
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+        echo "dir=$out" >> "$GITHUB_OUTPUT"
+        if [ "$rc" = 3 ] || [ ! -s "$report" ]; then
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          echo "::error::fdroidkit doctor could not read the repo (exit $rc)"
+          exit 1
+        fi
+        strict=()
+        if [ "$IN_STRICT" = "true" ]; then strict=(--fail-on-warn); fi
+        "$FDROIDKIT_DOCTOR_VENV/bin/python" "$SUMMARY" "$report" "${strict[@]}" >> "$GITHUB_STEP_SUMMARY" || rc=1
+        if [ "$rc" = 0 ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "ok=false" >> "$GITHUB_OUTPUT"; fi
+        "$FDROIDKIT_DOCTOR_VENV/bin/python" "$SUMMARY" "$report" --annotations "${strict[@]}" || true
+        exit "$rc"
+
+    - name: Upload report
+      if: always() && inputs.artifact == 'true' && steps.doctor.outputs.dir != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.doctor.outputs.dir }}
+        if-no-files-found: warn
