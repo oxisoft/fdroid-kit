@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fdroidkit"
-version = "0.1.6"
+version = "0.1.7"
 description = "Run your own F-Droid repository: publish Play-signed APKs from CI, with signer pins, a Play protection guard and a landing page."
 readme = "README.md"
 license = "MIT"

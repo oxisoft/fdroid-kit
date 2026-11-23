@@ -17,7 +17,7 @@ Back up the working tree and the keystore it names (`keystore:` in `config.yml`,
 in the tree by default) somewhere outside both. Write down the fingerprint users know:
 
 ```
-pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.6"
+pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.7"
 fdroidkit doctor --url https://fdroid.example.com/fdroid/repo
 ```
 

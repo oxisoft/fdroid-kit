@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.7 (2026-11-23)
 
 - **`doctor` checks the storage budget.** It sums the APK sizes that the signed indexes of
   `repo/` and `archive/` list (no download) and compares them with `--budget`: `github-pages`

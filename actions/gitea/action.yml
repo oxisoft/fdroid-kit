@@ -4,7 +4,7 @@ description: Publish the Play-signed universal APK of a release to your own F-Dr
 # F-Droid repo working tree and its index key. Call it from an app's release job
 # after the Play upload:
 #
-#   - uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.6
+#   - uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.7
 #     env:
 #       PLAY_SA_JSON: ${{ secrets.PLAY_SA_JSON }}
 #     with:
