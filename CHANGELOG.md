@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **`doctor` checks the storage budget.** It sums the APK sizes that the signed indexes of
+  `repo/` and `archive/` list (no download) and compares them with `--budget`: `github-pages`
+  (the 1 GB Pages site limit), a byte count, or `500M` / `2G`. Warning from 80%, failure from
+  100%; without a budget only the total is reported. With `--repo` it also reads
+  `archive_older` and warns when the steady state (every app holding that many versions) would
+  pass the budget, naming the `archive_older` that fits. `--json` carries a `storage` block with
+  the biggest apps first, the job summary shows them as a table, and both doctor actions take a
+  `budget` input. On the demo repo: 434 MB today, about 1.3 GB at `archive_older: 3`.
+
 ## 0.1.6 (2026-11-23)
 
 - **Community health files and a migration guide.** `CONTRIBUTING.md` (dev setup, fixture and

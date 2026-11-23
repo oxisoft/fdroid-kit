@@ -8,6 +8,10 @@ import sys
 ICON = {"ok": "ok", "warn": "WARN", "fail": "FAIL", "skip": "skip"}
 
 
+def _mb(n: int) -> str:
+    return f"{n / 1e6:.1f} MB"
+
+
 def main(argv: list[str]) -> int:
     path = argv[0]
     strict = "--fail-on-warn" in argv
@@ -29,6 +33,17 @@ def main(argv: list[str]) -> int:
         detail = str(ch.get("detail", "")).replace("|", "\\|").replace("\n", " ")
         print(f"| {ch['name']} | {ch['subject']} | {ICON.get(ch['status'], ch['status'])} | {detail} |")
     print()
+    st = rep.get("storage")
+    if st and st.get("apps"):
+        head = f"{_mb(st['total_bytes'])} in {st['apks']} APK(s)"
+        if st.get("budget_bytes"):
+            head += f", {st['percent']}% of {st['budget']} ({_mb(st['budget_bytes'])})"
+        print(f"#### Storage: {head}\n")
+        print("| app | versions | repo | archive | total |\n|---|---|---|---|---|")
+        for a in st["apps"][:10]:
+            print(f"| {a['package']} | {a['versions']} | {_mb(a['repo_bytes'])} | {_mb(a['archive_bytes'])} "
+                  f"| {_mb(a['bytes'])} |")
+        print()
     return 1 if bad else 0
 
 

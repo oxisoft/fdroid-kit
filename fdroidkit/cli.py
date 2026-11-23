@@ -119,6 +119,9 @@ def build_parser() -> argparse.ArgumentParser:
                    "without /fdroid/repo)")
     s.add_argument("--no-apk", action="store_true", help="skip the APK pairip scan (no APK bytes read)")
     s.add_argument("--all-versions", action="store_true", help="scan every served APK, not only the newest per app")
+    s.add_argument("--budget", metavar="HOST|BYTES",
+                   help="storage budget for the APKs of repo + archive: github-pages (1 GB site limit), a byte "
+                        "count or e.g. 500M / 2G; warn at 80%%, fail at 100%% (default: report the total only)")
     s.add_argument("--json", action="store_true", help="machine-readable report on stdout")
     return p
 
@@ -300,7 +303,7 @@ def _doctor(args) -> int:
     import urllib.error
     from pathlib import Path
 
-    from .doctor import DoctorError, doctor
+    from .doctor import DoctorError, doctor, parse_budget
     from .publish import read_config
     from .site.keys import KeyReadError
     from .site.render import SiteError
@@ -311,8 +314,13 @@ def _doctor(args) -> int:
         print("fdroidkit doctor: give --url, or --repo with repo_url in its config.yml", file=sys.stderr)
         return 3
     try:
+        budget = parse_budget(args.budget)
+    except ValueError as e:
+        print(f"fdroidkit doctor: {e}", file=sys.stderr)
+        return 2
+    try:
         rep = doctor(url, repo=repo, site=args.site_url, scan_apks=not args.no_apk,
-                     all_versions=args.all_versions)
+                     all_versions=args.all_versions, budget=budget)
     except (DoctorError, KeyReadError, SiteError, urllib.error.URLError, OSError) as e:
         print(f"fdroidkit doctor: {e}", file=sys.stderr)
         return 3

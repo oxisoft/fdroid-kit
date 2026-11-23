@@ -14,6 +14,9 @@ Every check reads what is actually served, never the working tree alone:
              entries are read, with HTTP Range requests (no full download when the host
              supports ranges)
 - version    the live versionCode is not behind the local metadata or the local index
+- storage    bytes of every APK the signed indexes of repo/ and archive/ list, against a host
+             budget (`--budget github-pages` = the 1 GB Pages site limit, or a byte count):
+             warning from 80%, failure from 100%; sizes come from the indexes, no download
 
 Exit status: 0 nothing failed (warnings allowed), 1 at least one check failed, 3 the repo could
 not be read at all.
@@ -48,6 +51,15 @@ from .site.verify import FP_RE, _qr_modules
 TLS_MIN_DAYS = 14
 STALE_DAYS = 90
 UA = "fdroidkit-doctor"
+BUDGET_WARN = 0.8
+# Named host budgets: (bytes, where the number comes from). 1 GB is read as 10^9 bytes, the
+# stricter reading of GitHub's "may be no larger than 1 GB".
+BUDGETS = {
+    "github-pages": (1_000_000_000, "GitHub Pages: published sites may be no larger than 1 GB, "
+                     "https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits"),
+}
+_UNITS = {"": 1, "k": 10**3, "m": 10**6, "g": 10**9, "t": 10**12,
+          "ki": 2**10, "mi": 2**20, "gi": 2**30, "ti": 2**40}
 
 
 class DoctorError(RuntimeError):
@@ -67,6 +79,7 @@ class Report:
     url: str
     site: str
     checks: list[Check] = field(default_factory=list)
+    storage: dict | None = None
 
     def add(self, name: str, subject: str, status: str, detail: str) -> None:
         self.checks.append(Check(name, subject, status, detail))
@@ -94,8 +107,11 @@ class Report:
         return out
 
     def to_json(self) -> str:
-        return json.dumps({"url": self.url, "site": self.site, "ok": self.ok, "counts": self.counts(),
-                           "checks": [asdict(c) for c in self.checks]}, indent=2)
+        out = {"url": self.url, "site": self.site, "ok": self.ok, "counts": self.counts(),
+               "checks": [asdict(c) for c in self.checks]}
+        if self.storage is not None:
+            out["storage"] = self.storage
+        return json.dumps(out, indent=2)
 
 
 # ---- network (injectable for tests) ------------------------------------------
@@ -410,10 +426,142 @@ def _check_pairip(rep: Report, net: Net, apk_url: str, pkg_id: str, code: int) -
         rep.add("pairip", subject, "ok", f"{len(dex)} dex file(s), no com.pairip")
 
 
+# ---- storage budget -------------------------------------------------------------------
+
+def parse_budget(spec: str | None) -> tuple[int, str] | None:
+    """`github-pages` | `<bytes>` | `<n>[k|M|G|T][i][B]` (decimal, `i` = binary) -> (bytes, label)."""
+    if spec is None or spec.strip().lower() in ("", "none"):
+        return None
+    s = spec.strip()
+    if s.lower() in BUDGETS:
+        return BUDGETS[s.lower()][0], s.lower()
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([kmgt]i?)?b?", s, re.I)
+    if not m or float(m.group(1)) <= 0:
+        raise ValueError(f"budget {spec!r}: give github-pages, a byte count, or e.g. 500M / 2G")
+    return int(float(m.group(1)) * _UNITS[(m.group(2) or "").lower()]), s
+
+
+def human(n: float) -> str:
+    for unit in ("B", "kB", "MB", "GB"):
+        if n < 1000 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1000
+    return f"{n:.1f} GB"
+
+
+def archive_url(url: str) -> str | None:
+    """fdroidserver's default layout: <base>/repo next to <base>/archive."""
+    return re.sub(r"/repo$", "/archive", url) if url.endswith("/repo") else None
+
+
+def _archive_index(rep: Report, net: Net, url: str, key: str, runner: Callable) -> tuple[dict, str]:
+    """The archive's index-v2 data when it is served and signed by the repo key, plus a note."""
+    aurl = archive_url(url)
+    if not aurl:
+        return {}, "archive not checked (URL does not end in /repo)"
+    jar = net.get(aurl + "/entry.jar")
+    if jar is None:
+        return {}, "no archive served"
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "entry.jar"
+        p.write_bytes(jar)
+        try:
+            akey = keys.jar_fingerprint(p, runner=runner)
+        except keys.KeyReadError as e:
+            rep.add("storage", "archive", "warn", f"archive/entry.jar unreadable, archive not counted: {e}")
+            return {}, "archive unreadable"
+    if akey != key:
+        rep.add("storage", "archive", "warn", f"archive/entry.jar signer {akey[:16]}... is not the repo key, "
+                "archive not counted")
+        return {}, "archive signer differs"
+    try:
+        entry = _jar_entry_json(jar)
+    except (KeyError, zipfile.BadZipFile, json.JSONDecodeError):
+        return {}, "archive entry.jar holds no entry.json"
+    iname = entry.get("index", {}).get("name", "/index-v2.json")
+    raw = net.get(aurl + iname)
+    if raw is None or hashlib.sha256(raw).hexdigest() != entry.get("index", {}).get("sha256", ""):
+        rep.add("storage", "archive", "warn", f"archive{iname} missing or not the signed copy, archive not counted")
+        return {}, "archive index unverified"
+    return json.loads(raw), "archive counted"
+
+
+def archive_older(repo: Path | None) -> int | None:
+    """archive_older from the working tree's config.yml (fdroidserver's default is 3)."""
+    cfg = repo / "config.yml" if repo else None
+    if not cfg or not cfg.exists():
+        return None
+    m = re.search(r"^archive_older:\s*(\d+)", cfg.read_text(), re.M)
+    return int(m.group(1)) if m else 3
+
+
+def check_storage(rep: Report, net: Net, url: str, key: str, data: dict, budget: tuple[int, str] | None,
+                  runner: Callable, keep: int | None = None) -> None:
+    """Sum the APK bytes both signed indexes list (file.size) and compare them with the budget.
+    With `keep` (archive_older from --repo) also project the steady state: every app holding
+    `keep` versions the size of its newest APK in repo/."""
+    archive, note = _archive_index(rep, net, url, key, runner)
+    apps: dict[str, dict] = {}
+    unsized = 0
+    for where, idx in (("repo", data), ("archive", archive)):
+        for pkg_id, pkg in idx.get("packages", {}).items():
+            a = apps.setdefault(pkg_id, {"package": pkg_id, "bytes": 0, "versions": 0,
+                                         "repo_bytes": 0, "archive_bytes": 0})
+            for v in pkg.get("versions", {}).values():
+                size = v.get("file", {}).get("size")
+                if not isinstance(size, int):
+                    unsized += 1
+                    continue
+                a["bytes"] += size
+                a[f"{where}_bytes"] += size
+                a["versions"] += 1
+    ranked = sorted(apps.values(), key=lambda a: (-a["bytes"], a["package"]))
+    total = sum(a["bytes"] for a in ranked)
+    repo_b = sum(a["repo_bytes"] for a in ranked)
+    arch_b = sum(a["archive_bytes"] for a in ranked)
+    n = sum(a["versions"] for a in ranked)
+    newest = {}
+    for pkg_id, pkg in data.get("packages", {}).items():
+        vers = _versions(pkg)
+        if vers and isinstance(vers[0].get("file", {}).get("size"), int):
+            newest[pkg_id] = vers[0]["file"]["size"]
+    projected = sum(newest.values()) * keep if keep else None
+    rep.storage = {"total_bytes": total, "repo_bytes": repo_b, "archive_bytes": arch_b, "apks": n,
+                   "archive_older": keep, "projected_bytes": projected,
+                   "archive": note, "budget_bytes": budget[0] if budget else None,
+                   "budget": budget[1] if budget else None,
+                   "percent": round(100 * total / budget[0], 1) if budget else None,
+                   "apps": ranked}
+    top = ", ".join(f"{a['package']} {human(a['bytes'])}" for a in ranked[:3] if a["bytes"])
+    what = (f"{human(total)} in {n} APK(s) (repo {human(repo_b)}, archive {human(arch_b)}"
+            f"{'' if note == 'archive counted' else ': ' + note})" + (f"; biggest: {top}" if top else ""))
+    if unsized:
+        rep.add("storage", "sizes", "warn", f"{unsized} APK(s) listed without file.size, not counted")
+    if not budget:
+        rep.add("storage", "total", "ok", what + "; no budget set (--budget github-pages for Pages)")
+        return
+    pct = total / budget[0]
+    st = "fail" if pct >= 1 else "warn" if pct >= BUDGET_WARN else "ok"
+    tail = {"ok": "", "warn": f": over {BUDGET_WARN:.0%}, lower archive_older or drop old versions",
+            "fail": ": OVER BUDGET, the next deploy can be rejected; lower archive_older or drop old versions"}[st]
+    rep.add("storage", "total", st, f"{what}; {pct * 100:.1f}% of {budget[1]} {human(budget[0])}{tail}")
+    if projected and st == "ok" and projected >= budget[0] * BUDGET_WARN:
+        rep.add("storage", "projected", "warn",
+                f"with archive_older {keep} every app keeps {keep} version(s) in repo/: about {human(projected)}, "
+                f"{100 * projected / budget[0]:.0f}% of {human(budget[0])} once each app has {keep} releases; "
+                f"archive_older {_fits(sum(newest.values()), budget[0])} keeps it under {BUDGET_WARN:.0%}")
+
+
+def _fits(newest_total: int, budget: int) -> int:
+    """The largest archive_older whose steady state stays under the warning line (at least 1)."""
+    return max(1, int(budget * BUDGET_WARN // newest_total)) if newest_total else 1
+
+
 # ---- the command -------------------------------------------------------------------
 
 def doctor(url: str, repo: Path | None = None, site: str | None = None, net: Net | None = None,
-           runner: Callable | None = None, scan_apks: bool = True, all_versions: bool = False) -> Report:
+           runner: Callable | None = None, scan_apks: bool = True, all_versions: bool = False,
+           budget: tuple[int, str] | None = None) -> Report:
     net = net or Net()
     runner = runner or _run
     url = url.rstrip("/")
@@ -424,6 +572,7 @@ def doctor(url: str, repo: Path | None = None, site: str | None = None, net: Net
         check_tls(rep, net, rep.site)
     check_landing(rep, net, url, rep.site, key)
     check_apps(rep, net, url, data, repo, scan_apks=scan_apks, all_versions=all_versions)
+    check_storage(rep, net, url, key, data, budget, runner, keep=archive_older(repo))
     return rep
 
 

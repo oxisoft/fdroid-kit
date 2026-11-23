@@ -43,3 +43,16 @@ def test_warn_only_fails_when_strict(tmp_path):
     assert "::warning " in _run(p, "--annotations").stdout
     assert _run(p, "--fail-on-warn").returncode == 1
     assert "::error " in _run(p, "--annotations", "--fail-on-warn").stdout
+
+
+def test_storage_table(tmp_path):
+    p = _report(tmp_path)
+    rep = json.loads(p.read_text())
+    rep["storage"] = {"total_bytes": 434_100_000, "apks": 5, "budget_bytes": 10**9, "budget": "github-pages",
+                      "percent": 43.4, "apps": [{"package": "io.x.big", "versions": 1, "repo_bytes": 211_500_000,
+                                                 "archive_bytes": 0, "bytes": 211_500_000}]}
+    p.write_text(json.dumps(rep))
+    r = _run(p)
+    assert r.returncode == 0
+    assert "#### Storage: 434.1 MB in 5 APK(s), 43.4% of github-pages (1000.0 MB)" in r.stdout
+    assert "| io.x.big | 1 | 211.5 MB | 0.0 MB | 211.5 MB |" in r.stdout

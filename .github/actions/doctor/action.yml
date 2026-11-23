@@ -13,6 +13,7 @@ description: Audit a live F-Droid repo the way users' clients see it (TLS, signe
 #         - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.6
 #           with:
 #             url: https://fdroid.example.com/fdroid/repo
+#             budget: github-pages   # optional: warn at 80%, fail at 100% of the 1 GB site limit
 #
 # Read only: no secrets, no checkout needed. With repo-path (a checkout of your F-Droid
 # working tree) it also checks every served signer against the pins in metadata/ and the
@@ -34,6 +35,9 @@ inputs:
   apk-scan:
     description: "false = skip the pairip scan (no APK bytes read)"
     default: "true"
+  budget:
+    description: "Storage budget for the APKs of repo + archive: github-pages (1 GB site limit), a byte count or e.g. 500M; warn at 80%, fail at 100% (default: total reported, no budget)"
+    default: ""
   fail-on-warn:
     description: "true = a warning fails the step too (default: only failed checks do)"
     default: "false"
@@ -84,6 +88,7 @@ runs:
         IN_SITE: ${{ inputs.site-url }}
         IN_ALL: ${{ inputs.all-versions }}
         IN_APK: ${{ inputs.apk-scan }}
+        IN_BUDGET: ${{ inputs.budget }}
         IN_STRICT: ${{ inputs.fail-on-warn }}
         IN_NAME: ${{ inputs.artifact-name }}
         SUMMARY: ${{ github.action_path }}/../../../actions/doctor/summary.py
@@ -95,6 +100,7 @@ runs:
         if [ -n "$IN_SITE" ]; then args+=(--site-url "$IN_SITE"); fi
         if [ "$IN_ALL" = "true" ]; then args+=(--all-versions); fi
         if [ "$IN_APK" = "false" ]; then args+=(--no-apk); fi
+        if [ -n "$IN_BUDGET" ]; then args+=(--budget "$IN_BUDGET"); fi
         out="$RUNNER_TEMP/$IN_NAME"
         mkdir -p "$out"
         report="$out/doctor.json"

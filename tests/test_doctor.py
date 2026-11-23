@@ -43,8 +43,8 @@ def apk(dex: bytes = b"dex\n035 Lcom/example/Main;") -> bytes:
     return b.getvalue()
 
 
-def version(code, signers):
-    return {"file": {"name": f"/com.example.app_{code}.apk"},
+def version(code, signers, size=1000, pkg="com.example.app"):
+    return {"file": {"name": f"/{pkg}_{code}.apk", "size": size},
             "manifest": {"versionCode": code, "signer": {"sha256": signers}}}
 
 
@@ -331,6 +331,109 @@ def test_range_reader_reads_dex_without_full_download():
         srv.shutdown()
 
 
+# ---- storage ---------------------------------------------------------------------------
+
+ARCH = URL.removesuffix("/repo") + "/archive"
+MB = 10**6
+
+
+def with_archive(files, versions, mark="key", index_bytes=None):
+    """Add a signed archive (entry.jar + index-v2.json) next to the repo."""
+    index = {"packages": {p: {"versions": {str(v["manifest"]["versionCode"]): v for v in vs}}
+                          for p, vs in versions.items()}}
+    raw = json.dumps(index).encode()
+    entry = {"index": {"name": "/index-v2.json", "sha256": hashlib.sha256(raw).hexdigest()}}
+    files[f"{ARCH}/entry.jar"] = jar_with(entry, mark)
+    files[f"{ARCH}/index-v2.json"] = index_bytes or raw
+    return files
+
+
+def sized(pkg, sizes_mb, first_code=10):
+    return [version(first_code - i, [SIGNER], size=int(mb * MB), pkg=pkg) for i, mb in enumerate(sizes_mb)]
+
+
+def test_storage_without_budget_reports_total_only():
+    rep = run(live_repo({"com.example.app": sized("com.example.app", [300, 200])}))
+    assert status(rep, "storage", "total") == "ok"
+    assert rep.storage["total_bytes"] == 500 * MB and rep.storage["budget_bytes"] is None
+    assert rep.storage["archive"] == "no archive served"
+
+
+def test_storage_under_budget_ok_and_counts_archive():
+    files = with_archive(live_repo({"com.example.app": sized("com.example.app", [100])}),
+                         {"com.example.app": sized("com.example.app", [100, 100], first_code=9)})
+    rep = run(files, budget=dr.parse_budget("github-pages"))
+    assert status(rep, "storage", "total") == "ok" and rep.ok
+    st = rep.storage
+    assert (st["repo_bytes"], st["archive_bytes"], st["apks"]) == (100 * MB, 200 * MB, 3)
+    assert st["percent"] == 30.0 and st["budget"] == "github-pages"
+    assert "30.0% of github-pages 1.0 GB" in [c.detail for c in rep.checks if c.name == "storage"][0]
+
+
+def test_storage_warns_at_80_percent_and_ranks_apps():
+    files = live_repo({"com.big": sized("com.big", [500, 200]), "com.small": sized("com.small", [150])})
+    rep = run(files, budget=dr.parse_budget("github-pages"))
+    assert status(rep, "storage", "total") == "warn" and rep.ok
+    data = json.loads(rep.to_json())["storage"]
+    assert [a["package"] for a in data["apps"]] == ["com.big", "com.small"]
+    assert data["apps"][0]["bytes"] == 700 * MB and data["apps"][0]["versions"] == 2
+
+
+def test_storage_fails_over_budget():
+    files = with_archive(live_repo({"com.example.app": sized("com.example.app", [400])}),
+                         {"com.example.app": sized("com.example.app", [400, 300], first_code=9)})
+    rep = run(files, budget=dr.parse_budget("github-pages"))
+    assert status(rep, "storage", "total") == "fail" and not rep.ok
+    assert any("OVER BUDGET" in c.detail for c in rep.checks if c.name == "storage")
+
+
+def test_storage_ignores_archive_with_another_signer_or_stale_index():
+    files = with_archive(live_repo({"com.example.app": sized("com.example.app", [100])}),
+                         {"com.example.app": sized("com.example.app", [900], first_code=9)}, mark="other")
+    rep = run(files, budget=dr.parse_budget("github-pages"))
+    assert status(rep, "storage", "archive") == "warn" and rep.storage["archive_bytes"] == 0
+    files = with_archive(live_repo({"com.example.app": sized("com.example.app", [100])}),
+                         {"com.example.app": sized("com.example.app", [900], first_code=9)},
+                         index_bytes=b'{"packages": {}}')
+    rep = run(files)
+    assert status(rep, "storage", "archive") == "warn" and rep.storage["archive"] == "archive index unverified"
+
+
+def test_storage_projects_archive_older_from_repo(tmp_path):
+    (tmp_path / "config.yml").write_text("repo_url: x\narchive_older: 3\n")
+    files = live_repo({"com.big": sized("com.big", [200]), "com.small": sized("com.small", [100])})
+    rep = run(files, repo=None, budget=dr.parse_budget("github-pages"))
+    assert not [c for c in rep.checks if c.subject == "projected"]
+    rep = dr.doctor(URL, net=FakeNet(files), runner=runner_for({}), budget=dr.parse_budget("github-pages"))
+    dr.check_storage(rep, FakeNet(files), URL, FP, json.loads(files[f"{URL}/index-v2.json"]),
+                     dr.parse_budget("github-pages"), runner_for({}), keep=dr.archive_older(tmp_path))
+    proj = [c for c in rep.checks if c.subject == "projected"]
+    assert proj and proj[0].status == "warn" and "archive_older 2 keeps it under 80%" in proj[0].detail
+    assert rep.storage["projected_bytes"] == 900 * MB and rep.storage["archive_older"] == 3
+    (tmp_path / "config.yml").write_text("repo_url: x\n")
+    assert dr.archive_older(tmp_path) == 3 and dr.archive_older(None) is None
+
+
+def test_storage_missing_size_warns():
+    v = version(5, [SIGNER])
+    del v["file"]["size"]
+    rep = run(live_repo({"com.example.app": [v]}))
+    assert status(rep, "storage", "sizes") == "warn"
+
+
+@pytest.mark.parametrize("spec,want", [("github-pages", 10**9), ("123456", 123456), ("500M", 500 * MB),
+                                       ("2G", 2 * 10**9), ("1GiB", 2**30), ("1.5gb", 1_500_000_000)])
+def test_parse_budget(spec, want):
+    assert dr.parse_budget(spec)[0] == want
+
+
+def test_parse_budget_none_and_bad():
+    assert dr.parse_budget(None) is None and dr.parse_budget("none") is None
+    for bad in ("2x", "-1", "0", "lots"):
+        with pytest.raises(ValueError):
+            dr.parse_budget(bad)
+
+
 # ---- cli -----------------------------------------------------------------------------
 
 def test_cli_needs_a_url(capsys):
@@ -345,3 +448,14 @@ def test_cli_json_and_exit_codes(monkeypatch, capsys):
     monkeypatch.setattr(dr, "Net", lambda: FakeNet(live_repo(page_fp=OTHER)))
     assert cli.main(["doctor", "--url", URL]) == 1
     assert "UNHEALTHY" in capsys.readouterr().out
+
+
+def test_cli_budget(monkeypatch, capsys):
+    big = {"com.example.app": sized("com.example.app", [600, 500])}
+    monkeypatch.setattr(dr, "Net", lambda: FakeNet(live_repo(big)))
+    monkeypatch.setattr(dr, "_run", runner_for({}))
+    assert cli.main(["doctor", "--url", URL, "--no-apk"]) == 0
+    capsys.readouterr()
+    assert cli.main(["doctor", "--url", URL, "--no-apk", "--budget", "github-pages", "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["storage"]["percent"] == 110.0
+    assert cli.main(["doctor", "--url", URL, "--budget", "2x"]) == 2

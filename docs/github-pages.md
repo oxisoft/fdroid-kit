@@ -78,6 +78,18 @@ artifact, and in an `if: always()` step shreds the key and the venv.
 - GitHub Pages sites are capped at 1 GB and artifacts at 10 GB; a Flutter APK is about
   50 MB, so keep `archive_older` small. The restore step only brings back what the
   current index lists: archived versions are not restored and drop out of the archive.
+  So the site settles at `archive_older` versions per app: the sum of every app's APK size
+  times `archive_older`. Five Flutter apps of 50 MB at the default 3 are 750 MB; one 200 MB
+  app on top passes 1 GB.
+- Check it: `fdroidkit doctor --repo fdroid --budget github-pages` (or `budget: github-pages`
+  on the doctor action) prints the total of repo + archive, warns from 80% and fails from 100%,
+  and with `--repo` warns ahead of time when `archive_older` will push you over, naming the
+  value that fits. `--json` lists the apps biggest first. See [doctor.md](doctor.md#storage-budget).
+- What over budget looks like: GitHub states the limit ("Published GitHub Pages sites may be
+  no larger than 1 GB") but documents no error message for it, so do not count on a clear one.
+  Expect the deploy step to fail or GitHub to act on the site later; the kit never trims
+  anything for you. If the deploy fails, users keep the last good index and a new release
+  simply does not reach them. A doctor run with a budget turns red before that happens.
 - Big APKs are fine: the 100 MB per-file limit is a git push limit, and the action deploys
   a Pages artifact, not a commit. The demo serves OxiTalk's 202 MB APK from Pages (HTTP 200,
   range requests work). What does bite with big APKs: the 1 GB site cap counts every version
