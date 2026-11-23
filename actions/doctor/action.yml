@@ -10,7 +10,7 @@ description: Audit a live F-Droid repo the way users' clients see it (TLS, signe
 #     doctor:
 #       runs-on: <your runner>
 #       steps:
-#         - uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.5
+#         - uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.6
 #           with:
 #             url: https://fdroid.example.com/fdroid/repo
 #

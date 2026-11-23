@@ -1,7 +1,7 @@
 # Weekly health check of your live F-Droid repo (GitHub Actions). Copy to
 # .github/workflows/doctor.yml in any repo; a failed check turns the run red and GitHub
 # mails the workflow owner. Gitea / Forgejo: same file under .gitea/workflows/, your
-# runner label, and `uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@main`.
+# runner label, and `uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.6`.
 name: fdroid doctor
 
 on:
@@ -18,7 +18,7 @@ jobs:
     steps:
       # Only needed for repo-path (pin + version checks against your metadata/).
       - uses: actions/checkout@v7
-      - uses: oxisoft/fdroid-kit/.github/actions/doctor@main
+      - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.6
         with:
           url: https://fdroid.example.com/fdroid/repo
           repo-path: fdroid          # optional: your F-Droid working tree in this repo

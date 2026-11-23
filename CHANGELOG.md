@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6 (2026-11-23)
 
 - **Community health files and a migration guide.** `CONTRIBUTING.md` (dev setup, fixture and
   no-real-keys rules, PR checklist), `SECURITY.md` (private reports via GitHub security
