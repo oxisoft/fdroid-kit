@@ -45,7 +45,7 @@ the advisory and CHANGELOG unless you prefer not to be named.
 
 ## Supported versions
 
-Only the latest release gets fixes. Pin a release tag (`@v0.1.7`) and upgrade when a security
+Only the latest release gets fixes. Pin a release tag (`@v0.1.8`) and upgrade when a security
 release ships; the CHANGELOG marks them.
 
 ## If your index key leaked

@@ -7,7 +7,7 @@ adds it to your F-Droid repo, deploys it and reads it back from the live index. 
 install from F-Droid and update from Play, or the other way round, because both channels ship the
 same Google-signed APK.
 
-> Status: **v0.1.7**. Eight commands (with `doctor`, `refresh`, `restore`), two publish actions and a doctor action, tested on real Play-signed
+> Status: **v0.1.8**. Eight commands (with `doctor`, `refresh`, `restore`), two publish actions and a doctor action, tested on real Play-signed
 > and self-signed (GitHub Release) APKs. See the [CHANGELOG](CHANGELOG.md).
 
 ## Quickstart
@@ -16,7 +16,7 @@ On your own server (Gitea / Forgejo runner, nginx serving the repo). Needs Pytho
 (`keytool`), the Android build-tools and [fdroidserver](https://f-droid.org/docs/Installing_the_Server_and_Repo_Tools/).
 
 ```
-pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.7"
+pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.8"
 export FDROID_KEYSTORE_PASS="$(head -c 32 /dev/urandom | base64)"   # store it in your password manager
 fdroidkit --repo fdroid init --name "Example Apps" --url https://fdroid.example.com/fdroid/repo
 fdroidkit --repo fdroid add-app com.example.app --discover-signer universal.apk
@@ -185,6 +185,14 @@ accent, org_name, org_url, footer_links, per-app badges, a custom `template`): s
 [examples/fdroidkit.json](examples/fdroidkit.json). The QR needs `pip install 'fdroidkit[site]'`
 (qrcode; Pillow also downscales the icons).
 
+**Badges.** `site.badges` maps an applicationId to a display `category` (falls back to the
+index's F-Droid category), small `tags` (also written to the app's JSON-LD `keywords`) and an
+optional `title_badge` right after the app name, e.g. `{"text": "BETA", "color": "#FF6A00"}` or
+just `"BETA"`. The colour must be `#RGB` or `#RRGGBB` (default: `accent`); the text turns dark or
+light, whichever contrasts more. Each colour becomes a class in site.css, so the page keeps its
+strict CSP. `badges` may also be a path to a JSON file of the same shape, relative to the repo
+(`"badges": "app_tags.json"`); keys starting with `_` are comments.
+
 Each app also gets an **Add to Obtainium** link, for people who use
 [Obtainium](https://obtainium.imranr.dev/) instead of an F-Droid client. It imports the app with
 Obtainium's F-Droid third-party repo source, so updates come from your signed index. Set
@@ -226,7 +234,7 @@ whether the live versionCode lags the local metadata or index. Exit 0 healthy (w
 Gitea / Forgejo:
 
 ```yaml
-- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.7
+- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.8
   env: { PLAY_SA_JSON: "${{ secrets.PLAY_SA_JSON }}" }
   with: { package: com.example.app, version-code: "42", version-name: "1.4.0", repo-path: /srv/fdroid }
 ```
@@ -240,7 +248,7 @@ throwaway venv, so the runner needs only Python 3.10+, the Android build-tools a
 GitHub Actions + GitHub Pages (no server at all):
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.7
+- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.8
   env:
     FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
     FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
@@ -267,11 +275,11 @@ jobs:
   doctor:
     runs-on: ubuntu-latest
     steps:
-      - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.7
+      - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.8
         with: { url: https://fdroid.example.com/fdroid/repo }
 ```
 
-Gitea / Forgejo: `uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.7` on any runner
+Gitea / Forgejo: `uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.8` on any runner
 with Python 3.10+. Inputs: `url`, `repo-path` (adds the pin and version checks), `site-url`,
 `all-versions`, `apk-scan`, `fail-on-warn`; outputs `report` (JSON path) and `ok`. The GitHub
 action also writes a job summary and uploads the JSON as an artifact.
@@ -303,6 +311,7 @@ Full examples in [examples/](examples/).
 - v0.1.5: `refresh` (metadata-only changes reach the live index), `restore`, `source: none` in both actions.
 - v0.1.6: reusable doctor action (GitHub + Gitea) for a scheduled audit, weekly canary against the newest upstream tools, community files and a migration guide.
 - v0.1.7: `doctor --budget` (storage against the GitHub Pages 1 GB limit or any size, `archive_older` projection), `budget` input on both doctor actions.
+- v0.1.8: per-app `title_badge` (status badge after the name, validated colour, contrast text, CSP-safe classes), `site.badges` from a JSON file.
 
 ## In production
 

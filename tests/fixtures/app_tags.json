@@ -1,0 +1,32 @@
+{
+  "_comment": "Badges on the landing page. category = display label (larger, coloured); falls back to the F-Droid Categories value from the index. tags = small badges. title_badge (optional) = status badge right after the title, e.g. {\"text\": \"BETA\", \"color\": \"#FF6A00\"} (color #RGB/#RRGGBB, default bright orange; text colour picks itself for contrast). Keys are applicationIds.",
+  "io.oxisoft.triplespace": {
+    "category": "Game",
+    "tags": ["2D", "puzzle", "merge", "cosmic", "offline"]
+  },
+  "io.oxisoft.sudoku": {
+    "category": "Game",
+    "tags": ["puzzle", "logic", "neon", "daily challenge", "offline"]
+  },
+  "io.oxisoft.oxipomodoro": {
+    "category": "Productivity",
+    "tags": ["focus", "timer", "pomodoro", "neon"]
+  },
+  "io.oxisoft.habitobserver": {
+    "category": "Health & Habits",
+    "tags": ["habit tracker", "streaks", "stats", "reminders", "offline"]
+  },
+  "io.oxisoft.oxitalk": {
+    "title_badge": {"text": "BETA", "color": "#FF6A00"},
+    "category": "Communication",
+    "tags": ["Matrix", "encrypted", "chat", "calls", "open source"]
+  },
+  "io.oxisoft.cybercalc": {
+    "category": "Privacy",
+    "tags": ["calculator", "hidden notes", "encrypted", "offline", "neon"]
+  },
+  "io.oxisoft.oxipoker": {
+    "category": "Games",
+    "tags": ["poker", "self-hosted", "multiplayer", "voice and video", "open source"]
+  }
+}

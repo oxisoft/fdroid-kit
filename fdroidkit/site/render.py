@@ -29,6 +29,8 @@ ICON_PX = 192  # rows show icons at 84 px, 192 covers a 2x screen
 SCHEMA_CATEGORY = {"Games": "GameApplication", "Time": "ProductivityApplication",
                    "Security": "SecurityApplication", "Internet": "BrowserApplication"}
 HEX = re.compile(r"^#[0-9A-Fa-f]{3,8}$")
+RGB = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
+FALLBACK_BADGE = "#FF6A00"
 LOCALE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
 
 
@@ -46,7 +48,10 @@ class Brand:
     org_name: str = ""
     org_url: str = ""
     footer_links: list = field(default_factory=list)  # [{"label": ..., "url": ...}]
-    badges: dict = field(default_factory=dict)  # appId -> {"category": str, "tags": [str]}
+    # appId -> {"category": str, "tags": [str], "title_badge": {"text": str, "color": "#RRGGBB"}},
+    # or a path (relative to the repo) to a JSON file of that shape; keys starting with "_" are
+    # comments. After load_brand every title_badge is {"text", "color" (#rrggbb, lower case)}.
+    badges: dict | str = field(default_factory=dict)
     template: str = ""  # custom index.html template, relative to the repo
     # "Add to Obtainium" per app: "direct" (obtainium:// link, no third party), "redirect"
     # (Obtainium's own redirect page, falls back to a "get Obtainium" prompt) or false (off).
@@ -77,7 +82,80 @@ def load_brand(repo: Path) -> Brand:
         raise SiteError(f'{p}: site.locales must be a list of locales like ["en-US", "pl"], got {b.locales!r}')
     if len({x.lower() for x in b.locales}) != len(b.locales):
         raise SiteError(f"{p}: site.locales lists a locale twice: {b.locales!r}")
+    b.badges = load_badges(repo, b.badges, b.accent, str(p))
     return b
+
+
+def _hex6(color: str) -> str:
+    color = color.lower()
+    return "#" + "".join(c * 2 for c in color[1:]) if len(color) == 4 else color
+
+
+def load_badges(repo: Path, badges, accent: str, where: str) -> dict:
+    """site.badges as a dict or a JSON file path; validated, title badges normalised."""
+    if isinstance(badges, str):
+        bp = repo / badges
+        try:
+            badges = json.loads(bp.read_text())
+        except FileNotFoundError as e:
+            raise SiteError(f"{where}: site.badges file {bp} does not exist") from e
+        except json.JSONDecodeError as e:
+            raise SiteError(f"{bp}: {e}") from e
+        where = str(bp)
+    if not isinstance(badges, dict):
+        raise SiteError(f"{where}: badges must be an object keyed by applicationId")
+    default = _hex6(accent) if RGB.match(accent) else FALLBACK_BADGE.lower()
+    out = {}
+    for app_id, b in badges.items():
+        if app_id.startswith("_"):
+            continue  # "_comment" and friends
+        if not isinstance(b, dict):
+            raise SiteError(f"{where}: badges for {app_id} must be an object, got {b!r}")
+        b = dict(b)
+        tags = b.get("tags", [])
+        if not isinstance(tags, list):
+            raise SiteError(f"{where}: {app_id}: tags must be a list, got {tags!r}")
+        tb = b.pop("title_badge", None)
+        if isinstance(tb, str):
+            tb = {"text": tb}
+        if tb:
+            if not isinstance(tb, dict):
+                raise SiteError(f"{where}: {app_id}: title_badge must be text or {{\"text\", \"color\"}}")
+            text = str(tb.get("text", "")).strip()
+            color = str(tb.get("color") or default).strip()
+            if not RGB.match(color):
+                raise SiteError(f"{where}: {app_id}: title_badge color must be #RGB or #RRGGBB, got {color!r}")
+            if text:
+                b["title_badge"] = {"text": text, "color": _hex6(color)}
+        out[app_id] = b
+    return out
+
+
+def _luminance(color: str) -> float:
+    r, g, b = (int(color[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in (r, g, b)]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+DARK_TEXT, LIGHT_TEXT = "#0a0a0a", "#ffffff"
+
+
+def badge_text_color(color: str) -> str:
+    """Dark or light text, whichever has the higher WCAG contrast ratio on the badge colour."""
+    bg = _luminance(color)
+    dark = (bg + 0.05) / (_luminance(DARK_TEXT) + 0.05)
+    light = (_luminance(LIGHT_TEXT) + 0.05) / (bg + 0.05)
+    return DARK_TEXT if dark >= light else LIGHT_TEXT
+
+
+def badge_css(brand: Brand) -> str:
+    """One class per title badge colour: the page runs under style-src 'self', no style=."""
+    colors = sorted({b["title_badge"]["color"] for b in brand.badges.values() if b.get("title_badge")})
+    if not colors:
+        return ""
+    return "\n/* title badges, generated from site.badges */\n" + "".join(
+        f".tbadge.tb-{c[1:]} {{ background: {c}; border-color: {c}; color: {badge_text_color(c)}; }}\n"
+        for c in colors)
 
 
 def pick(d, locale: str = "en-US"):
@@ -222,7 +300,8 @@ def _apps(repo: Path, data: dict, brand: Brand, out: Path, address: str = "",
             "website": pick(md.get("webSite"), locale) or "",
             "shots": ["fdroid/repo" + s["name"] for s in phone],
             "catLabel": b.get("category") or fd_cat,
-            "tags": [t for t in b.get("tags", []) if t],
+            "tags": [str(t) for t in b.get("tags", []) if t],
+            "titleBadge": b.get("title_badge"),
             "category": SCHEMA_CATEGORY.get(fd_cat, ""),
             "obtainium": (obtainium_link(address, app_id, name, author, brand.obtainium)
                           if brand.obtainium and address and latest else ""),
@@ -242,6 +321,8 @@ def _app_rows(apps: list[dict]) -> str:
             badges = ('<div class="badges">'
                       + (f'<span class="badge cat">{e(a["catLabel"])}</span>' if a["catLabel"] else "")
                       + "".join(f'<span class="badge">{e(t)}</span>' for t in a["tags"]) + "</div>")
+        tb = a.get("titleBadge")
+        tbadge = f' <span class="tbadge tb-{tb["color"][1:]}">{e(tb["text"])}</span>' if tb else ""
         dl = (f'<a class="applink" href="{e(a.get("href_apk", a["apk"]))}" aria-label="Download APK for {e(a["name"])}">'
               "Download APK</a>") if a["apk"] else ""
         if a.get("obtainium"):
@@ -253,7 +334,7 @@ def _app_rows(apps: list[dict]) -> str:
         rows.append(f'''      <div class="app" id="{e(a["id"])}">
         {img}
         <div class="appmeta">
-          <strong>{e(a["name"])}</strong>
+          <strong>{e(a["name"])}{tbadge}</strong>
           <p>{e(a["summary"])}</p>
           {badges}
           <span class="appver">{e(a["version"])} &middot; {e(a["size"])}</span>
@@ -449,6 +530,6 @@ def _page(repo: Path, out: Path, sub: str, locale: str, brand: Brand, data: dict
     (out / sub).mkdir(parents=True, exist_ok=True)
     (out / sub / "index.html").write_text(page)
     if not sub:
-        css = string.Template(_template(repo, brand, "site.css")).safe_substitute(accent=brand.accent)
+        css = string.Template(_template(repo, brand, "site.css")).safe_substitute(accent=brand.accent) + badge_css(brand)
         (out / "site.css").write_text(css)
     return apps

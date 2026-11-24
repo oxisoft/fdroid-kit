@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.8 (2026-11-25)
+
+- **Title badges.** `site.badges.<app>.title_badge` puts a status badge (BETA, ALPHA,
+  ARCHIVED...) right after the app name: `{"text": "BETA", "color": "#FF6A00"}` or just
+  `"BETA"` (colour defaults to `accent`). The colour must be `#RGB` or `#RRGGBB`, anything else
+  stops `site` with a clear error. The text colour picks dark or light by WCAG contrast. Each
+  colour becomes a generated class in site.css, never an inline `style=`, so the strict CSP holds.
+- **Badges from a file.** `site.badges` may be a path to a JSON file relative to the repo, in the
+  same shape (`applicationId` -> `category`, `tags`, `title_badge`; keys starting with `_` are
+  comments). A hand-kept `app_tags.json` from an older landing page script loads unchanged.
+- Tags were already written to each app's JSON-LD `keywords`; now covered by a test.
+
 ## 0.1.7 (2026-11-23)
 
 - **`doctor` checks the storage budget.** It sums the APK sizes that the signed indexes of

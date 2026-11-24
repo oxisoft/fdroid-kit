@@ -378,3 +378,73 @@ def test_bad_locales_are_refused(tmp_path, bad):
     repo = make_repo(tmp_path, brand={"locales": bad})
     with pytest.raises(rnd.SiteError, match="site.locales"):
         rnd.render(repo, Path("site"), runner=fake_runner())
+
+
+def _ld_apps(page):
+    ld = json.loads(re.search(r'application/ld\+json">(.*?)</script>', page, re.S).group(1))
+    items = next(g for g in ld["@graph"] if g["@type"] == "ItemList")["itemListElement"]
+    return {i["item"]["name"]: i["item"] for i in items}
+
+
+def test_title_badge_and_keywords(tmp_path):
+    repo = make_repo(tmp_path, brand={"accent": "#2F6FEB", "badges": {
+        "com.example.alpha": {"title_badge": {"text": "BETA <x>", "color": "#FF6A00"},
+                              "tags": ["offline", "no ads"]},
+        "com.example.zeta": {"title_badge": "ALPHA"},  # text only: accent colour
+    }})
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    page = (repo / "site" / "index.html").read_text()
+    css = (repo / "site" / "site.css").read_text()
+    assert '<strong>Alpha <span class="tbadge tb-ff6a00">BETA &lt;x&gt;</span></strong>' in page
+    assert '<span class="tbadge tb-2f6feb">ALPHA</span></strong>' in page
+    assert " style=" not in page and "<style" not in page  # strict CSP: colours live in site.css
+    assert ".tbadge.tb-ff6a00 { background: #ff6a00; border-color: #ff6a00; color: #0a0a0a; }" in css
+    assert ".tbadge.tb-2f6feb { background: #2f6feb; border-color: #2f6feb; color: #ffffff; }" in css
+    apps = _ld_apps(page)
+    assert apps["Alpha"]["keywords"] == "offline, no ads"
+    assert "keywords" not in apps["Zeta </script> app"]
+
+
+@pytest.mark.parametrize("color,fg", [("#FFF", "#0a0a0a"), ("#000000", "#ffffff"), ("#FFC400", "#0a0a0a"),
+                                      ("#FF2A3D", "#0a0a0a"), ("#1A1A2E", "#ffffff"), ("#2F6FEB", "#ffffff")])
+def test_badge_text_contrast(color, fg):
+    c = rnd._hex6(color)
+    assert rnd.badge_text_color(c) == fg
+    lum = rnd._luminance(c)
+    other = rnd.LIGHT_TEXT if fg == rnd.DARK_TEXT else rnd.DARK_TEXT
+    ratio = lambda a, b: (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    assert ratio(lum, rnd._luminance(fg)) >= ratio(lum, rnd._luminance(other))
+
+
+@pytest.mark.parametrize("bad", ["orange", "#FF6A0", "#FF6A00CC", "#GGGGGG", "#fff;}body{display:none"])
+def test_bad_title_badge_color_is_refused(tmp_path, bad):
+    repo = make_repo(tmp_path, brand={"badges": {"com.example.alpha": {"title_badge": {"text": "BETA", "color": bad}}}})
+    with pytest.raises(rnd.SiteError, match=r"com.example.alpha: title_badge color must be #RGB or #RRGGBB"):
+        rnd.render(repo, Path("site"), runner=fake_runner())
+
+
+def test_badges_from_an_app_tags_file_unchanged(tmp_path):
+    """A separate badges file in the app_tags.json shape (with a "_comment" key) loads as is."""
+    repo = make_repo(tmp_path, apps={"io.oxisoft.oxitalk": ("OxiTalk", "Chat", 5, "0.2.1"),
+                                     "io.oxisoft.sudoku": ("Sudoku", "Puzzle", 9, "1.0")},
+                     brand={"badges": "app_tags.json"})
+    (repo / "app_tags.json").write_text((Path(__file__).parent / "fixtures" / "app_tags.json").read_text())
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    page = (repo / "site" / "index.html").read_text()
+    assert '<strong>OxiTalk <span class="tbadge tb-ff6a00">BETA</span></strong>' in page
+    assert '<span class="badge cat">Communication</span><span class="badge">Matrix</span>' in page
+    assert "_comment" not in page and "<strong>Sudoku</strong>" in page
+    assert _ld_apps(page)["Sudoku"]["keywords"] == "puzzle, logic, neon, daily challenge, offline"
+    assert ".tbadge.tb-ff6a00" in (repo / "site" / "site.css").read_text()
+
+
+def test_missing_badges_file_is_refused(tmp_path):
+    repo = make_repo(tmp_path, brand={"badges": "nope.json"})
+    with pytest.raises(rnd.SiteError, match="nope.json does not exist"):
+        rnd.render(repo, Path("site"), runner=fake_runner())
+
+
+def test_no_title_badges_no_generated_css(tmp_path):
+    repo = make_repo(tmp_path, brand={"badges": {"com.example.alpha": {"tags": ["x"]}}})
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    assert ".tbadge.tb-" not in (repo / "site" / "site.css").read_text()

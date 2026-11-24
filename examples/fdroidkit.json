@@ -13,7 +13,8 @@
       {"label": "Get F-Droid", "url": "https://f-droid.org/"}
     ],
     "badges": {
-      "com.example.app": {"category": "Puzzle", "tags": ["offline", "no ads"]}
+      "com.example.app": {"category": "Puzzle", "tags": ["offline", "no ads"]},
+      "com.example.chat": {"title_badge": {"text": "BETA", "color": "#FF6A00"}, "tags": ["chat"]}
     }
   }
 }
