@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.9 (2026-11-25)
+
+- **App data for custom templates.** A custom `template` can place `$appdata`: one JSON object
+  keyed by applicationId with each app's name, summary, description paragraphs, icon, APK,
+  website, screenshots, category, tags, title badge (with its generated CSS class) and Obtainium
+  link, paths relative to the page (subpages of other locales included). Put it in a
+  `<script type="application/json">` element and a same-origin script can build an app details
+  dialog without breaking the strict CSP. Every `<` is written as `\u003c`, so a hostile app name
+  cannot close the element.
+- Every app row now carries `data-app="<applicationId>"` for such scripts.
+
 ## 0.1.8 (2026-11-25)
 
 - **Title badges.** `site.badges.<app>.title_badge` puts a status badge (BETA, ALPHA,

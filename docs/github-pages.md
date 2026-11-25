@@ -44,7 +44,7 @@ Run the workflow (Actions > publish to F-Droid > Run workflow) with the package,
 versionName and the URL of the signed APK, or call the action from your app's release job:
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.8
+- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.9
   env:
     FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
     FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}

@@ -331,7 +331,7 @@ def _app_rows(apps: list[dict]) -> str:
                   f'aria-label="Add {e(a["name"])} to Obtainium">Add to Obtainium</a></div>')
         desc = "".join(f"<p>{e(p)}</p>" for p in a["description"])
         more = f"<details><summary>More</summary>{desc}</details>" if desc else ""
-        rows.append(f'''      <div class="app" id="{e(a["id"])}">
+        rows.append(f'''      <div class="app" id="{e(a["id"])}" data-app="{e(a["id"])}">
         {img}
         <div class="appmeta">
           <strong>{e(a["name"])}{tbadge}</strong>
@@ -343,6 +343,25 @@ def _app_rows(apps: list[dict]) -> str:
         {dl}
       </div>''')
     return "\n".join(rows)
+
+
+def app_data(apps: list[dict]) -> str:
+    """Per-app JSON for a custom template's script (`<script id="appdata"
+    type="application/json">$appdata</script>`, read by a same-origin site.js under a strict
+    CSP): keyed by applicationId, page-relative paths, safe inside a script element."""
+    out = {}
+    for a in apps:
+        tb = a.get("titleBadge")
+        out[a["id"]] = {
+            "id": a["id"], "name": a["name"], "summary": a["summary"], "description": a["description"],
+            "icon": a.get("href_icon", a["icon"]), "version": a["version"], "size": a["size"],
+            "apk": a.get("href_apk", a["apk"]), "website": a["website"],
+            "shots": [a.get("base", "") + s for s in a["shots"]], "catLabel": a["catLabel"], "tags": a["tags"],
+            "titleBadge": dict(tb, cls=f"tb-{tb['color'][1:]}") if tb else None,
+            "obtainium": a["obtainium"],
+        }
+    # \u003c keeps "</script>" and "<!--" out of the element and is still plain JSON
+    return json.dumps(out, ensure_ascii=False).replace("<", "\\u003c")
 
 
 def structured_data(root: str, title: str, description: str, brand: Brand, apps: list[dict],
@@ -497,6 +516,7 @@ def _page(repo: Path, out: Path, sub: str, locale: str, brand: Brand, data: dict
     for a in apps:  # page-relative paths, absolute ones in JSON-LD use root
         a["href_icon"] = up + a["icon"] if a["icon"] else ""
         a["href_apk"] = up + a["apk"] if a["apk"] else ""
+        a["base"] = up
     obtainium_note = ""
     if any(a["obtainium"] for a in apps):
         obtainium_note = ('<p class="alt-client">No F-Droid client? <a href="https://obtainium.imranr.dev/">'
@@ -526,7 +546,7 @@ def _page(repo: Path, out: Path, sub: str, locale: str, brand: Brand, data: dict
         fingerprint=fp, fingerprint_grouped=group_fp(fp),
         app_heading=f"{count} app{'s' if count != 1 else ''} in the repository",
         apps=_app_rows(apps), obtainium_note=obtainium_note, org=org, footer_links=links, updated=updated,
-        jsonld=ld, lang=e(locale), base=up, alternates=alternates, lang_switch=switch)
+        jsonld=ld, appdata=app_data(apps), lang=e(locale), base=up, alternates=alternates, lang_switch=switch)
     (out / sub).mkdir(parents=True, exist_ok=True)
     (out / sub / "index.html").write_text(page)
     if not sub:

@@ -448,3 +448,31 @@ def test_no_title_badges_no_generated_css(tmp_path):
     repo = make_repo(tmp_path, brand={"badges": {"com.example.alpha": {"tags": ["x"]}}})
     rnd.render(repo, Path("site"), runner=fake_runner())
     assert ".tbadge.tb-" not in (repo / "site" / "site.css").read_text()
+
+
+def test_appdata_for_a_custom_template(tmp_path):
+    repo = make_repo(tmp_path, brand={"template": "tpl.html", "locales": ["en-US", "pl"],
+                                      "badges": {"com.example.zeta": {"title_badge": "BETA", "tags": ["x"]}}})
+    (repo / "tpl.html").write_text('<html lang="$lang"><body>$apps\n'
+                                   '<script id="appdata" type="application/json">$appdata</script>'
+                                   '<script src="${base}site.js"></script></body></html>')
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    for sub, up in (("", ""), ("pl/", "../")):
+        page = (repo / "site" / sub / "index.html").read_text()
+        assert 'data-app="com.example.alpha"' in page and 'data-app="com.example.zeta"' in page
+        raw = re.search(r'id="appdata" type="application/json">(.*?)</script>', page, re.S).group(1)
+        assert "</" not in raw  # the app name holds "</script>": escaped, still plain JSON
+        data = json.loads(raw)
+        z = data["com.example.zeta"]
+        assert z["name"] == "Zeta </script> app" and z["description"] == ["Line one wrapped.", 'Second "para".']
+        assert z["icon"] == f"{up}appicons/com.example.zeta.png" and z["apk"] == f"{up}fdroid/repo/com.example.zeta_42.apk"
+        assert z["titleBadge"]["text"] == "BETA" and z["titleBadge"]["cls"].startswith("tb-") and z["tags"] == ["x"]
+        assert data["com.example.alpha"]["titleBadge"] is None
+
+
+def test_default_template_rows_carry_data_app(tmp_path):
+    repo = make_repo(tmp_path)
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    page = (repo / "site" / "index.html").read_text()
+    assert '<div class="app" id="com.example.alpha" data-app="com.example.alpha">' in page
+    assert "$appdata" not in page
