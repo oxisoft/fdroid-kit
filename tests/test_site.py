@@ -476,3 +476,21 @@ def test_default_template_rows_carry_data_app(tmp_path):
     page = (repo / "site" / "index.html").read_text()
     assert '<div class="app" id="com.example.alpha" data-app="com.example.alpha">' in page
     assert "$appdata" not in page
+
+
+def test_base_css_false_keeps_only_badge_rules(tmp_path):
+    repo = make_repo(tmp_path, brand={"base_css": False,
+                                      "badges": {"com.example.zeta": {"title_badge": {"text": "BETA", "color": "#FF6A00"}}}})
+    rnd.render(repo, Path("site"), runner=fake_runner())
+    css = (repo / "site" / "site.css").read_text()
+    assert ".tbadge {" in css and ".tbadge.tb-ff6a00 {" in css
+    assert "body" not in css and ".app" not in css
+    full = make_repo(tmp_path / "full", brand={"badges": {"com.example.zeta": {"title_badge": "BETA"}}})
+    rnd.render(full, Path("site"), runner=fake_runner())
+    assert rnd.TBADGE_BASE.strip() in (full / "site" / "site.css").read_text()
+
+
+def test_base_css_must_be_a_boolean(tmp_path):
+    repo = make_repo(tmp_path, brand={"base_css": "no"})
+    with pytest.raises(rnd.SiteError, match="base_css must be true or false"):
+        rnd.render(repo, Path("site"), runner=fake_runner())

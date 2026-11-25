@@ -53,6 +53,9 @@ class Brand:
     # comments. After load_brand every title_badge is {"text", "color" (#rrggbb, lower case)}.
     badges: dict | str = field(default_factory=dict)
     template: str = ""  # custom index.html template, relative to the repo
+    # false: site.css holds only the title badge rules (a custom template brings its own theme
+    # and links it after site.css); true: the kit's full stylesheet plus the badge rules.
+    base_css: bool = True
     # "Add to Obtainium" per app: "direct" (obtainium:// link, no third party), "redirect"
     # (Obtainium's own redirect page, falls back to a "get Obtainium" prompt) or false (off).
     obtainium: str | bool = "direct"
@@ -72,6 +75,8 @@ def load_brand(repo: Path) -> Brand:
     b = Brand(**{k: v for k, v in raw.items() if k in Brand.__dataclass_fields__})
     if not HEX.match(b.accent):
         raise SiteError(f"{p}: site.accent must be a hex colour like #2F6FEB, got {b.accent!r}")
+    if not isinstance(b.base_css, bool):
+        raise SiteError(f"{p}: site.base_css must be true or false, got {b.base_css!r}")
     if b.obtainium is True:
         b.obtainium = "direct"
     if b.obtainium not in (False, "direct", "redirect"):
@@ -146,6 +151,10 @@ def badge_text_color(color: str) -> str:
     dark = (bg + 0.05) / (_luminance(DARK_TEXT) + 0.05)
     light = (_luminance(LIGHT_TEXT) + 0.05) / (bg + 0.05)
     return DARK_TEXT if dark >= light else LIGHT_TEXT
+
+
+TBADGE_BASE = (".tbadge { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; border: 1px solid; "
+               "border-radius: 4px; padding: 0 6px; vertical-align: middle; }\n")
 
 
 def badge_css(brand: Brand) -> str:
@@ -550,6 +559,9 @@ def _page(repo: Path, out: Path, sub: str, locale: str, brand: Brand, data: dict
     (out / sub).mkdir(parents=True, exist_ok=True)
     (out / sub / "index.html").write_text(page)
     if not sub:
-        css = string.Template(_template(repo, brand, "site.css")).safe_substitute(accent=brand.accent) + badge_css(brand)
+        if brand.base_css:
+            css = string.Template(_template(repo, brand, "site.css")).safe_substitute(accent=brand.accent) + badge_css(brand)
+        else:
+            css = "/* fdroidkit: site.base_css is false, title badge rules only */\n" + TBADGE_BASE + badge_css(brand)
         (out / "site.css").write_text(css)
     return apps

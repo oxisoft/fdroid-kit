@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.10 (2026-11-25)
+
+- **Bring your own theme.** `site.base_css: false` makes the generated site.css hold only the
+  title badge rules (the `.tbadge` base and one class per colour). A custom template links it
+  first and its own stylesheet after it, and the kit's body font, card and row spacing no longer
+  leak into the page. Any value other than true or false stops `site` with a clear error. The
+  default stays `true`: the full stylesheet, unchanged.
+
 ## 0.1.9 (2026-11-25)
 
 - **App data for custom templates.** A custom `template` can place `$appdata`: one JSON object

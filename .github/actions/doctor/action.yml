@@ -10,7 +10,7 @@ description: Audit a live F-Droid repo the way users' clients see it (TLS, signe
 #     doctor:
 #       runs-on: ubuntu-latest
 #       steps:
-#         - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.9
+#         - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.10
 #           with:
 #             url: https://fdroid.example.com/fdroid/repo
 #             budget: github-pages   # optional: warn at 80%, fail at 100% of the 1 GB site limit

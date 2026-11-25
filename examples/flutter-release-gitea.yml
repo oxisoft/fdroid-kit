@@ -24,7 +24,7 @@ jobs:
       - name: Publish to F-Droid
         # Secrets only as env: the Play service account (written to a 0600 temp file and
         # removed) and the index key passphrases config.yml reads with {env: NAME}.
-        uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.9
+        uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.10
         env:
           PLAY_SA_JSON: ${{ secrets.PLAY_SA_JSON }}
           FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}

@@ -12,7 +12,7 @@ body:
     id: fdroidkit-version
     attributes:
       label: fdroidkit version
-      description: Output of `fdroidkit --version`, or the action tag you use (e.g. `@v0.1.9`).
+      description: Output of `fdroidkit --version`, or the action tag you use (e.g. `@v0.1.10`).
     validations:
       required: true
   - type: input

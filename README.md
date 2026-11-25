@@ -7,7 +7,7 @@ adds it to your F-Droid repo, deploys it and reads it back from the live index. 
 install from F-Droid and update from Play, or the other way round, because both channels ship the
 same Google-signed APK.
 
-> Status: **v0.1.9**. Eight commands (with `doctor`, `refresh`, `restore`), two publish actions and a doctor action, tested on real Play-signed
+> Status: **v0.1.10**. Eight commands (with `doctor`, `refresh`, `restore`), two publish actions and a doctor action, tested on real Play-signed
 > and self-signed (GitHub Release) APKs. See the [CHANGELOG](CHANGELOG.md).
 
 ## Quickstart
@@ -16,7 +16,7 @@ On your own server (Gitea / Forgejo runner, nginx serving the repo). Needs Pytho
 (`keytool`), the Android build-tools and [fdroidserver](https://f-droid.org/docs/Installing_the_Server_and_Repo_Tools/).
 
 ```
-pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.9"
+pip install "fdroidkit[site] @ git+https://github.com/oxisoft/fdroid-kit@v0.1.10"
 export FDROID_KEYSTORE_PASS="$(head -c 32 /dev/urandom | base64)"   # store it in your password manager
 fdroidkit --repo fdroid init --name "Example Apps" --url https://fdroid.example.com/fdroid/repo
 fdroidkit --repo fdroid add-app com.example.app --discover-signer universal.apk
@@ -223,6 +223,11 @@ Obtainium link; paths relative to the page). Put it in
 same-origin script, for example to open a details dialog on a row click. `<` is written as
 `\u003c`, so an app name cannot close the element, and the page still passes the strict CSP.
 
+**Your own theme.** With `"base_css": false` under `site`, the generated site.css holds only the
+title badge rules (the `.tbadge` base plus one class per colour), so a custom template can link
+site.css first and its own stylesheet after it without the kit's layout, fonts and spacing
+leaking in. Default `true`: the kit's full stylesheet, as before.
+
 ### doctor
 
 ```
@@ -242,7 +247,7 @@ whether the live versionCode lags the local metadata or index. Exit 0 healthy (w
 Gitea / Forgejo:
 
 ```yaml
-- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.9
+- uses: https://github.com/oxisoft/fdroid-kit/actions/gitea@v0.1.10
   env: { PLAY_SA_JSON: "${{ secrets.PLAY_SA_JSON }}" }
   with: { package: com.example.app, version-code: "42", version-name: "1.4.0", repo-path: /srv/fdroid }
 ```
@@ -256,7 +261,7 @@ throwaway venv, so the runner needs only Python 3.10+, the Android build-tools a
 GitHub Actions + GitHub Pages (no server at all):
 
 ```yaml
-- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.9
+- uses: oxisoft/fdroid-kit/.github/actions/publish@v0.1.10
   env:
     FDROID_KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
     FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
@@ -283,11 +288,11 @@ jobs:
   doctor:
     runs-on: ubuntu-latest
     steps:
-      - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.9
+      - uses: oxisoft/fdroid-kit/.github/actions/doctor@v0.1.10
         with: { url: https://fdroid.example.com/fdroid/repo }
 ```
 
-Gitea / Forgejo: `uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.9` on any runner
+Gitea / Forgejo: `uses: https://github.com/oxisoft/fdroid-kit/actions/doctor@v0.1.10` on any runner
 with Python 3.10+. Inputs: `url`, `repo-path` (adds the pin and version checks), `site-url`,
 `all-versions`, `apk-scan`, `fail-on-warn`; outputs `report` (JSON path) and `ok`. The GitHub
 action also writes a job summary and uploads the JSON as an artifact.
@@ -321,6 +326,7 @@ Full examples in [examples/](examples/).
 - v0.1.7: `doctor --budget` (storage against the GitHub Pages 1 GB limit or any size, `archive_older` projection), `budget` input on both doctor actions.
 - v0.1.9: `$appdata` (per-app JSON for a custom template) and `data-app` on every row.
 - v0.1.8: per-app `title_badge` (status badge after the name, validated colour, contrast text, CSP-safe classes), `site.badges` from a JSON file.
+- v0.1.10: `site.base_css: false` (site.css carries only the title badge rules, for a custom template with its own theme).
 
 ## In production
 
