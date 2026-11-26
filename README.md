@@ -339,8 +339,7 @@ Extracted from [fdroid.oxisoft.io](https://fdroid.oxisoft.io), the F-Droid repo 
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/pytest
 ```
 
-Source: [g.oxisoft.io/oxisoft/fdroid-kit](https://g.oxisoft.io/oxisoft/fdroid-kit), mirrored to
-[github.com/oxisoft/fdroid-kit](https://github.com/oxisoft/fdroid-kit). Issues and pull requests
+Source: [github.com/oxisoft/fdroid-kit](https://github.com/oxisoft/fdroid-kit). Issues and pull requests
 are welcome on GitHub: see [CONTRIBUTING.md](CONTRIBUTING.md) (setup, fixture rules, PR checklist).
 Found a key handling or secrets problem? Report it privately, see [SECURITY.md](SECURITY.md).
 

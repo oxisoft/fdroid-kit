@@ -30,7 +30,7 @@ fdroidkit = "fdroidkit.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/oxisoft/fdroid-kit"
-Source = "https://g.oxisoft.io/oxisoft/fdroid-kit"
+Source = "https://github.com/oxisoft/fdroid-kit"
 Issues = "https://github.com/oxisoft/fdroid-kit/issues"
 
 [tool.setuptools.packages.find]
